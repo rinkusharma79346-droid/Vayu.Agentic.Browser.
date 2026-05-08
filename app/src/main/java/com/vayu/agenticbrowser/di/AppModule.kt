@@ -1,8 +1,11 @@
 package com.vayu.agenticbrowser.di
 
 import com.vayu.agenticbrowser.agent.McpServer
+import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.DomController
+import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.engine.WebViewManager
+import com.vayu.agenticbrowser.tabs.TabManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,13 +24,42 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDomController(webViewManager: WebViewManager): DomController {
-        return DomController(webViewManager)
+    fun provideTabManager(): TabManager {
+        return TabManager.getInstance()
     }
 
     @Provides
     @Singleton
-    fun provideMcpServer(domController: DomController): McpServer {
-        return McpServer(domController)
+    fun provideDownloadManager(): VayuDownloadManager {
+        return VayuDownloadManager.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideDomController(
+        webViewManager: WebViewManager,
+        tabManager: TabManager
+    ): DomController {
+        return DomController(webViewManager, tabManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWaitController(
+        tabManager: TabManager,
+        downloadManager: VayuDownloadManager
+    ): WaitController {
+        return WaitController(tabManager, downloadManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMcpServer(
+        domController: DomController,
+        tabManager: TabManager,
+        downloadManager: VayuDownloadManager,
+        waitController: WaitController
+    ): McpServer {
+        return McpServer(domController, tabManager, downloadManager, waitController)
     }
 }

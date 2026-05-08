@@ -1,39 +1,59 @@
 package com.vayu.agenticbrowser.engine
 
+import android.webkit.WebView
 import com.vayu.agenticbrowser.common.Logger
+import com.vayu.agenticbrowser.tabs.TabManager
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class DomController(
-    private val webViewManager: WebViewManager
+    private val webViewManager: WebViewManager,
+    private val tabManager: TabManager
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    suspend fun navigate(url: String): String {
-        return try {
-            val deferred = webViewManager.createPageLoadDeferred()
-            webViewManager.loadUrl(url)
+    private fun resolveTab(tabId: Int?): WebView {
+        if (tabId != null) {
+            return tabManager.getTab(tabId)
+                ?: throw IllegalArgumentException("Tab $tabId not found")
+        }
+        val activeId = tabManager.getActiveTabIdValue()
+        if (activeId != -1) {
+            return tabManager.getTab(activeId)
+                ?: webViewManager.getWebView()
+                ?: throw IllegalStateException("No WebView available")
+        }
+        return webViewManager.getWebView()
+            ?: throw IllegalStateException("No WebView available")
+    }
 
-            val loadedUrl = withTimeoutOrNull(10_000L) {
+    suspend fun navigate(url: String, tabId: Int? = null): String {
+        return try {
+            val wv = resolveTab(tabId)
+            val effectiveTabId = tabId ?: tabManager.getActiveTabIdValue()
+
+            val deferred = if (effectiveTabId != -1) {
+                tabManager.createPageLoadDeferred(effectiveTabId)
+            } else {
+                webViewManager.createPageLoadDeferred()
+            }
+
+            Logger.i("Navigating tab ${effectiveTabId} to: $url")
+            wv.loadUrl(url)
+
+            withTimeoutOrNull(10_000L) {
                 deferred.await()
             }
 
-            if (loadedUrl != null) {
-                val title = webViewManager.getTitle()
-                val currentUrl = webViewManager.getCurrentUrl()
-                json.encodeToString(
-                    NavigateResult(success = true, title = title, url = currentUrl)
-                )
-            } else {
-                val title = webViewManager.getTitle()
-                val currentUrl = webViewManager.getCurrentUrl()
-                json.encodeToString(
-                    NavigateResult(success = true, title = title, url = currentUrl)
-                )
-            }
+            val title = wv.title ?: ""
+            val currentUrl = wv.url ?: ""
+            json.encodeToString(
+                NavigateResult(success = true, title = title, url = currentUrl)
+            )
         } catch (e: Exception) {
             Logger.e("navigate error", e)
             json.encodeToString(
@@ -42,7 +62,7 @@ class DomController(
         }
     }
 
-    suspend fun querySelector(selector: String, all: Boolean): String {
+    suspend fun querySelector(selector: String, all: Boolean, tabId: Int? = null): String {
         return try {
             val jsCode = """
                 (function() {
@@ -69,18 +89,7 @@ class DomController(
                 })()
             """.trimIndent()
 
-            val rawResult = evaluateJsAndWait(jsCode)
-
-            if (rawResult.startsWith("\"") && rawResult.endsWith("\"")) {
-                val unquoted = json.decodeFromString<kotlinx.serialization.json.JsonElement>(
-                    "\"$rawResult\""
-                )
-                val innerJson = rawResult.substring(1, rawResult.length - 1)
-                    .replace("\\\\", "\\")
-                    .replace("\\\"", "\"")
-                return innerJson
-            }
-            rawResult
+            evaluateJsAndWait(jsCode, tabId)
         } catch (e: Exception) {
             Logger.e("querySelector error", e)
             json.encodeToString(
@@ -89,7 +98,7 @@ class DomController(
         }
     }
 
-    suspend fun click(selector: String, index: Int): String {
+    suspend fun click(selector: String, index: Int, tabId: Int? = null): String {
         return try {
             val jsCode = """
                 (function() {
@@ -109,14 +118,14 @@ class DomController(
                 })()
             """.trimIndent()
 
-            evaluateJsAndWait(jsCode)
+            evaluateJsAndWait(jsCode, tabId)
         } catch (e: Exception) {
             Logger.e("click error", e)
             """{"success":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
         }
     }
 
-    suspend fun type(selector: String, text: String, clearFirst: Boolean): String {
+    suspend fun type(selector: String, text: String, clearFirst: Boolean, tabId: Int? = null): String {
         return try {
             val escapedSelector = selector.replace("'", "\\'")
             val escapedText = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
@@ -146,14 +155,14 @@ class DomController(
                 })()
             """.trimIndent()
 
-            evaluateJsAndWait(jsCode)
+            evaluateJsAndWait(jsCode, tabId)
         } catch (e: Exception) {
             Logger.e("type error", e)
             """{"success":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
         }
     }
 
-    suspend fun evaluate(script: String): String {
+    suspend fun evaluate(script: String, tabId: Int? = null): String {
         return try {
             val escapedScript = script
                 .replace("\\", "\\\\")
@@ -171,17 +180,19 @@ class DomController(
                 })()
             """.trimIndent()
 
-            evaluateJsAndWait(jsCode)
+            evaluateJsAndWait(jsCode, tabId)
         } catch (e: Exception) {
             Logger.e("evaluate error", e)
             """{"error":"${e.message?.replace("\"", "\\\"")}"}"""
         }
     }
 
-    private suspend fun evaluateJsAndWait(script: String): String {
-        val result = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
-            webViewManager.evaluateJs(script) { result ->
-                cont.resume(result) {}
+    private suspend fun evaluateJsAndWait(script: String, tabId: Int? = null): String {
+        val wv = resolveTab(tabId)
+
+        val result = suspendCancellableCoroutine<String?> { cont ->
+            wv.evaluateJavascript(script) { res ->
+                cont.resume(res) {}
             }
         }
 
@@ -189,7 +200,6 @@ class DomController(
             return """{"error":"No result from JavaScript evaluation"}"""
         }
 
-        // Strip wrapping quotes if the result is a JSON string
         if (result.startsWith("\"") && result.endsWith("\"") && result.length >= 2) {
             return try {
                 val inner = result.substring(1, result.length - 1)
