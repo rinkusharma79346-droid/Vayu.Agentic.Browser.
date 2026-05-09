@@ -315,6 +315,11 @@ class VayuDownloadManager private constructor() {
         return File(ctx.getExternalFilesDir("Downloads"), filename).absolutePath
     }
 
+    fun clearHistory() {
+        _downloads.update { emptyMap() }
+        Logger.i("Download history cleared")
+    }
+
     @kotlinx.serialization.Serializable
     data class TriggerDownloadResult(val downloadId: String)
 

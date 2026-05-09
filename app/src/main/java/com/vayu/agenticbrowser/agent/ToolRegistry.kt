@@ -291,6 +291,121 @@ object ToolRegistry {
             parameters = mapOf(
                 "tabId" to ToolParam(type = "integer", description = "Optional tab ID to dismiss dialog in. Defaults to the active tab.", required = false)
             )
+        ),
+
+        // ===== Phase 4: Plugin Tools =====
+        ToolDef(
+            name = "plugin_list",
+            description = "List all installed plugins with their name, version, description, enabled status, and matched sites.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "plugin_enable",
+            description = "Enable a plugin by name so its tools and rules become active for matching sites.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "The name of the plugin to enable", required = true)
+            )
+        ),
+        ToolDef(
+            name = "plugin_disable",
+            description = "Disable a plugin by name so its tools and rules are no longer active.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "The name of the plugin to disable", required = true)
+            )
+        ),
+
+        // ===== Phase 4: Tunnel Tools =====
+        ToolDef(
+            name = "tunnel_start",
+            description = "Start a Cloudflare Tunnel that exposes the local MCP WebSocket server to the internet via a trycloudflare.com URL. Downloads cloudflared binary if not present.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "tunnel_stop",
+            description = "Stop the active Cloudflare Tunnel and remove the public URL.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "tunnel_get_url",
+            description = "Get the current Cloudflare Tunnel public URL if a tunnel is active.",
+            parameters = mapOf()
+        ),
+
+        // ===== Phase 4: Recording Tools =====
+        ToolDef(
+            name = "recording_start",
+            description = "Start recording agent tool calls. All subsequent tool calls will be captured until recording_stop is called.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "A descriptive name for this recording", required = true)
+            )
+        ),
+        ToolDef(
+            name = "recording_stop",
+            description = "Stop the current recording and save it. Returns the recording with all captured commands.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "recording_list",
+            description = "List all saved recordings with their names, command counts, and creation dates.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "recording_replay",
+            description = "Replay a saved recording by re-executing each command with original timing gaps (capped at 2s between commands). Returns a summary of results.",
+            parameters = mapOf(
+                "id" to ToolParam(type = "string", description = "The ID of the recording to replay", required = true)
+            )
+        ),
+        ToolDef(
+            name = "recording_delete",
+            description = "Delete a saved recording by its ID.",
+            parameters = mapOf(
+                "id" to ToolParam(type = "string", description = "The ID of the recording to delete", required = true)
+            )
+        ),
+
+        // ===== Phase 4: Session Tools =====
+        ToolDef(
+            name = "session_save",
+            description = "Save the current browser session (all tab URLs and cookies) to SharedPreferences by name for later restoration.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "A name to identify this saved session", required = true)
+            )
+        ),
+        ToolDef(
+            name = "session_load",
+            description = "Load a previously saved browser session by name, restoring all tab URLs and cookies.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "The name of the session to load", required = true)
+            )
+        ),
+
+        // ===== Phase 4: User Agent Tool =====
+        ToolDef(
+            name = "user_agent_set",
+            description = "Set a custom User-Agent string for all WebViews. Use preset names (Chrome Android, Chrome Desktop, Safari iOS) or a custom string.",
+            parameters = mapOf(
+                "userAgent" to ToolParam(type = "string", description = "The User-Agent string or preset name to apply", required = true)
+            )
+        ),
+
+        // ===== Phase 4: Stealth Tools =====
+        ToolDef(
+            name = "stealth_enable",
+            description = "Enable stealth mode on all WebViews. Removes navigator.webdriver, spoofs plugins, randomizes canvas fingerprint, and overrides window.chrome.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "stealth_disable",
+            description = "Disable stealth mode on all WebViews, reverting anti-detection modifications.",
+            parameters = mapOf()
+        ),
+
+        // ===== Phase 4: Browser Info Tool =====
+        ToolDef(
+            name = "browser_info",
+            description = "Get comprehensive browser status information including app version, tab count, connection status, tunnel URL, plugin count, and platform.",
+            parameters = mapOf()
         )
     )
 

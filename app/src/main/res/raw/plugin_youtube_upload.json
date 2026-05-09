@@ -1,0 +1,89 @@
+{
+  "name": "YouTube Upload",
+  "version": "1.0.0",
+  "description": "Automates video upload workflow on YouTube Studio including title, description, and visibility settings",
+  "sites": ["youtube.com/upload"],
+  "tools": [
+    {
+      "name": "set_title",
+      "description": "Sets the video title in YouTube Studio upload form",
+      "parameters": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "default": null
+        },
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    },
+    {
+      "name": "set_description",
+      "description": "Sets the video description in YouTube Studio upload form",
+      "parameters": {
+        "description": {
+          "type": "string",
+          "required": true,
+          "default": null
+        },
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    },
+    {
+      "name": "set_visibility",
+      "description": "Sets the video visibility (public, unlisted, or private) in YouTube Studio",
+      "parameters": {
+        "visibility": {
+          "type": "string",
+          "required": true,
+          "default": "public"
+        },
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    },
+    {
+      "name": "publish_video",
+      "description": "Clicks the Publish button in YouTube Studio to publish the uploaded video",
+      "parameters": {
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    }
+  ],
+  "rules": [
+    {
+      "trigger": "page_load",
+      "action": "wait_for_selector",
+      "args": {
+        "selector": "#title-textarea"
+      }
+    }
+  ],
+  "formTemplates": [
+    {
+      "name": "youtube_upload",
+      "fields": {
+        "title": "#title-textarea",
+        "description": "#description-textarea",
+        "visibility_public": "input[value='PUBLIC']",
+        "visibility_unlisted": "input[value='UNLISTED']",
+        "visibility_private": "input[value='PRIVATE']"
+      }
+    }
+  ],
+  "enabled": true
+}

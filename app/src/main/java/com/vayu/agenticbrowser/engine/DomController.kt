@@ -3,11 +3,13 @@ package com.vayu.agenticbrowser.engine
 import android.webkit.WebView
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.tabs.TabManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.random.Random
 
 class DomController(
     private val webViewManager: WebViewManager,
@@ -127,27 +129,91 @@ class DomController(
 
     suspend fun type(selector: String, text: String, clearFirst: Boolean, tabId: Int? = null): String {
         return try {
-            val escapedSelector = selector.replace("'", "\\'")
-            val escapedText = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
-            val clearCode = if (clearFirst) "el.value = '';" else ""
+            val humanTyping = StealthController.isHumanTypingEnabled()
 
-            val jsCode = """
+            if (humanTyping) {
+                typeWithHumanDelay(selector, text, clearFirst, tabId)
+            } else {
+                typeInstant(selector, text, clearFirst, tabId)
+            }
+        } catch (e: Exception) {
+            Logger.e("type error", e)
+            """{"success":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    private suspend fun typeInstant(selector: String, text: String, clearFirst: Boolean, tabId: Int?): String {
+        val escapedSelector = selector.replace("'", "\\'")
+        val escapedText = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+        val clearCode = if (clearFirst) "el.value = '';" else ""
+
+        val jsCode = """
+            (function() {
+                try {
+                    var el = document.querySelector('$escapedSelector');
+                    if (!el) return JSON.stringify({success: false, error: 'ELEMENT_NOT_FOUND'});
+                    el.focus();
+                    $clearCode
+                    var text = '$escapedText';
+                    for (var i = 0; i < text.length; i++) {
+                        var ch = text[i];
+                        el.value += ch;
+                        el.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, key: ch}));
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true, key: ch}));
+                    }
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                    el.dispatchEvent(new FocusEvent('blur', {bubbles: true}));
+                    return JSON.stringify({success: true});
+                } catch(e) {
+                    return JSON.stringify({success: false, error: e.message});
+                }
+            })()
+        """.trimIndent()
+
+        return evaluateJsAndWait(jsCode, tabId)
+    }
+
+    private suspend fun typeWithHumanDelay(selector: String, text: String, clearFirst: Boolean, tabId: Int?): String {
+        val escapedSelector = selector.replace("'", "\\'")
+        val clearCode = if (clearFirst) "el.value = '';" else ""
+
+        val wv = resolveTab(tabId)
+
+        // Focus and optionally clear
+        val focusJs = """
+            (function() {
+                try {
+                    var el = document.querySelector('$escapedSelector');
+                    if (!el) return JSON.stringify({success: false, error: 'ELEMENT_NOT_FOUND'});
+                    el.focus();
+                    $clearCode
+                    return JSON.stringify({success: true});
+                } catch(e) {
+                    return JSON.stringify({success: false, error: e.message});
+                }
+            })()
+        """.trimIndent()
+
+        evaluateJsAndWait(focusJs, tabId)
+
+        // Type each character with random delay
+        for (ch in text) {
+            val escapedChar = ch.toString()
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+
+            val charJs = """
                 (function() {
                     try {
                         var el = document.querySelector('$escapedSelector');
                         if (!el) return JSON.stringify({success: false, error: 'ELEMENT_NOT_FOUND'});
-                        el.focus();
-                        $clearCode
-                        var text = '$escapedText';
-                        for (var i = 0; i < text.length; i++) {
-                            var ch = text[i];
-                            el.value += ch;
-                            el.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, key: ch}));
-                            el.dispatchEvent(new Event('input', {bubbles: true}));
-                            el.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true, key: ch}));
-                        }
-                        el.dispatchEvent(new Event('change', {bubbles: true}));
-                        el.dispatchEvent(new FocusEvent('blur', {bubbles: true}));
+                        el.value += '$escapedChar';
+                        el.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, key: '$escapedChar'}));
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true, key: '$escapedChar'}));
                         return JSON.stringify({success: true});
                     } catch(e) {
                         return JSON.stringify({success: false, error: e.message});
@@ -155,11 +221,29 @@ class DomController(
                 })()
             """.trimIndent()
 
-            evaluateJsAndWait(jsCode, tabId)
-        } catch (e: Exception) {
-            Logger.e("type error", e)
-            """{"success":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+            evaluateJsAndWait(charJs, tabId)
+
+            // Random delay between 50-150ms
+            val delayMs = Random.nextLong(50, 150)
+            delay(delayMs)
         }
+
+        // Dispatch change and blur
+        val endJs = """
+            (function() {
+                try {
+                    var el = document.querySelector('$escapedSelector');
+                    if (!el) return JSON.stringify({success: true});
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                    el.dispatchEvent(new FocusEvent('blur', {bubbles: true}));
+                    return JSON.stringify({success: true, humanTyping: true});
+                } catch(e) {
+                    return JSON.stringify({success: false, error: e.message});
+                }
+            })()
+        """.trimIndent()
+
+        return evaluateJsAndWait(endJs, tabId)
     }
 
     suspend fun evaluate(script: String, tabId: Int? = null): String {

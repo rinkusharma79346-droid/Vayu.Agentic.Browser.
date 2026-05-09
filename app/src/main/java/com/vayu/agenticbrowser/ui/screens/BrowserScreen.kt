@@ -1,6 +1,9 @@
 package com.vayu.agenticbrowser.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.webkit.WebView
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -11,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,18 +25,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.vayu.agenticbrowser.agent.SessionRecorder
 import com.vayu.agenticbrowser.downloads.DownloadStatus
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
+import com.vayu.agenticbrowser.engine.StealthController
 import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.tabs.TabManager
 import com.vayu.agenticbrowser.tabs.TabState
+import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.ui.components.AgentDashboard
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen(
-    agentConnected: StateFlow<Boolean>
+    agentConnected: StateFlow<Boolean>,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var urlText by remember { mutableStateOf("https://www.google.com") }
@@ -41,14 +49,20 @@ fun BrowserScreen(
     val webViewManager = remember { WebViewManager.getInstance() }
     val tabManager = remember { TabManager.getInstance() }
     val downloadMgr = remember { VayuDownloadManager.getInstance() }
+    val tunnelManager = remember { TunnelManager.getInstance() }
+    val sessionRecorder = remember { SessionRecorder.getInstance() }
 
     val tabs by tabManager.tabs.collectAsState()
     val activeTabId by tabManager.activeTabId.collectAsState()
     val downloads by downloadMgr.downloads.collectAsState()
+    val tunnelUrl by tunnelManager.tunnelUrl.collectAsState()
+    val isRecording by sessionRecorder.isRecording.collectAsState()
 
     val activeDownloads = downloads.values.count {
         it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
     }
+
+    val stealthEnabled = StealthController.isStealthModeEnabled()
 
     // Initialize tab manager with context on first composition
     LaunchedEffect(Unit) {
@@ -116,6 +130,14 @@ fun BrowserScreen(
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = "Go"
+                    )
+                }
+
+                // Settings gear icon
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings"
                     )
                 }
             }
@@ -191,7 +213,9 @@ fun BrowserScreen(
                 lastToolName = "",
                 tabCount = tabs.size,
                 activeTabIndex = tabs.indexOfFirst { it.tabId == activeTabId }.coerceAtLeast(0),
-                downloadManager = downloadMgr
+                downloadManager = downloadMgr,
+                isRecording = isRecording,
+                stealthEnabled = stealthEnabled
             )
         }
 
@@ -221,12 +245,54 @@ fun BrowserScreen(
                         text = if (isConnected) "Agent: Connected" else "Agent: Disconnected",
                         style = MaterialTheme.typography.bodySmall
                     )
+
+                    // Recording indicator
+                    if (isRecording) {
+                        Surface(
+                            modifier = Modifier.size(8.dp),
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.error
+                        ) {}
+                        Text(
+                            text = "REC",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // Stealth indicator
+                    if (stealthEnabled) {
+                        Text(
+                            text = "STEALTH",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Tunnel URL chip
+                    if (tunnelUrl != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Tunnel URL", tunnelUrl))
+                            }
+                        ) {
+                            Text(
+                                text = "Tunnel: ${tunnelUrl!!.take(30)}...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     if (activeDownloads > 0) {
                         Text(
                             text = "\u2193 $activeDownloads active",
@@ -303,3 +369,8 @@ private fun TabChip(
         }
     }
 }
+
+private fun Modifier.clickable(onClick: () -> Unit): Modifier =
+    this.then(
+        androidx.compose.foundation.clickable(onClick = onClick)
+    )

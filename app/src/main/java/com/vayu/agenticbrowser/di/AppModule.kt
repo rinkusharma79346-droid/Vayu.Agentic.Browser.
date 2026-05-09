@@ -1,13 +1,17 @@
 package com.vayu.agenticbrowser.di
 
 import com.vayu.agenticbrowser.agent.McpServer
+import com.vayu.agenticbrowser.agent.SessionRecorder
+import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.DialogController
 import com.vayu.agenticbrowser.engine.DomController
 import com.vayu.agenticbrowser.engine.FormDetector
 import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.engine.WebViewManager
+import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.vault.BiometricAuth
 import com.vayu.agenticbrowser.vault.CredentialVault
 import com.vayu.agenticbrowser.vault.ProfileManager
@@ -56,6 +60,30 @@ object AppModule {
     @Singleton
     fun provideSmsOtpReader(): SmsOtpReader {
         return SmsOtpReader.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun providePluginRegistry(): PluginRegistry {
+        return PluginRegistry.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTunnelManager(): TunnelManager {
+        return TunnelManager.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSessionRecorder(): SessionRecorder {
+        return SessionRecorder.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideNetworkMonitor(): NetworkMonitor {
+        return NetworkMonitor.getInstance()
     }
 
     @Provides
@@ -113,11 +141,16 @@ object AppModule {
         biometricAuth: BiometricAuth,
         formDetector: FormDetector,
         dialogController: DialogController,
-        smsOtpReader: SmsOtpReader
+        smsOtpReader: SmsOtpReader,
+        pluginRegistry: PluginRegistry,
+        tunnelManager: TunnelManager,
+        sessionRecorder: SessionRecorder,
+        networkMonitor: NetworkMonitor
     ): McpServer {
         return McpServer(
             domController, tabManager, downloadManager, waitController,
-            credentialVault, profileManager, biometricAuth, formDetector, dialogController, smsOtpReader
+            credentialVault, profileManager, biometricAuth, formDetector, dialogController,
+            smsOtpReader, pluginRegistry, tunnelManager, sessionRecorder, networkMonitor
         )
     }
 }

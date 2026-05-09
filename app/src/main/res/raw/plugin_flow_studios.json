@@ -1,0 +1,33 @@
+{
+  "name": "Flow Studios",
+  "version": "1.0.0",
+  "description": "Automates image generation and download on Google Flow",
+  "sites": ["flow.google.com"],
+  "tools": [
+    {
+      "name": "generate_image",
+      "description": "Triggers image generation on Flow Studios by clicking the generate button",
+      "parameters": {
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    },
+    {
+      "name": "download_image",
+      "description": "Downloads the generated image from Flow Studios by clicking the download button on the result",
+      "parameters": {
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    }
+  ],
+  "rules": [],
+  "formTemplates": [],
+  "enabled": true
+}

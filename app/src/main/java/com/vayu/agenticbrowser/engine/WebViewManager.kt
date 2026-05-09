@@ -44,6 +44,12 @@ class WebViewManager private constructor() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 Logger.d("Page finished loading: $url")
+                // Inject stealth JS if stealth mode is enabled
+                if (StealthController.isStealthModeEnabled() && view != null) {
+                    view.evaluateJavascript(StealthController.getStealthJs()) { _ ->
+                        Logger.d("Stealth mode JS re-injected on page load")
+                    }
+                }
                 pageLoadDeferred.getAndSet(null)?.complete(url ?: "")
             }
         }

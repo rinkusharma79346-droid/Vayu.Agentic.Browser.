@@ -27,7 +27,9 @@ fun AgentDashboard(
     lastToolName: String,
     tabCount: Int,
     activeTabIndex: Int,
-    downloadManager: VayuDownloadManager
+    downloadManager: VayuDownloadManager,
+    isRecording: Boolean = false,
+    stealthEnabled: Boolean = false
 ) {
     val isConnected by agentConnected.collectAsState()
     val downloads by downloadManager.downloads.collectAsState()
@@ -52,21 +54,30 @@ fun AgentDashboard(
             }
     ) {
         if (isMinimized) {
-            // Minimized: just the connection dot
-            Surface(
-                shape = CircleShape,
-                color = if (isConnected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(24.dp),
-                onClick = { isMinimized = false }
-            ) {}
+            // Minimized: connection dot with recording indicator
+            Box(contentAlignment = Alignment.TopEnd) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (isConnected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(24.dp),
+                    onClick = { isMinimized = false }
+                ) {}
+                if (isRecording) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(10.dp)
+                    ) {}
+                }
+            }
         } else {
             // Expanded dashboard
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
                 tonalElevation = 4.dp,
-                modifier = Modifier.width(180.dp)
+                modifier = Modifier.width(200.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -121,7 +132,7 @@ fun AgentDashboard(
                             text = "Last:",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(36.dp)
+                            modifier = Modifier.width(46.dp)
                         )
                         Text(
                             text = lastToolName.ifBlank { "—" },
@@ -141,7 +152,7 @@ fun AgentDashboard(
                             text = "Tab:",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(36.dp)
+                            modifier = Modifier.width(46.dp)
                         )
                         Text(
                             text = "$activeTabIndex / $tabCount",
@@ -160,7 +171,7 @@ fun AgentDashboard(
                             text = "DL:",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(36.dp)
+                            modifier = Modifier.width(46.dp)
                         )
                         Text(
                             text = if (activeDownloads > 0) "$activeDownloads active" else "none",
@@ -169,6 +180,49 @@ fun AgentDashboard(
                             color = if (activeDownloads > 0) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+
+                    // Recording indicator
+                    if (isRecording) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 1.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.error
+                            ) {}
+                            Text(
+                                text = "REC",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    // Stealth indicator
+                    if (stealthEnabled) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.tertiary
+                            ) {}
+                            Text(
+                                text = "STEALTH",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                     }
                 }
             }

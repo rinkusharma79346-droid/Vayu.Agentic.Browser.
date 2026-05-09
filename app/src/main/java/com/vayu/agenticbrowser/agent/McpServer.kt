@@ -1,13 +1,20 @@
 package com.vayu.agenticbrowser.agent
 
+import android.content.Context
+import android.content.SharedPreferences
 import com.vayu.agenticbrowser.common.Logger
+import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.DialogController
 import com.vayu.agenticbrowser.engine.DomController
 import com.vayu.agenticbrowser.engine.FormDetector
 import com.vayu.agenticbrowser.engine.ScreenshotUtil
+import com.vayu.agenticbrowser.engine.StealthController
 import com.vayu.agenticbrowser.engine.WaitController
+import com.vayu.agenticbrowser.engine.WebViewManager
+import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.vault.BiometricAuth
 import com.vayu.agenticbrowser.vault.CredentialVault
 import com.vayu.agenticbrowser.vault.ProfileManager
@@ -38,17 +45,29 @@ class McpServer(
     private val biometricAuth: BiometricAuth,
     private val formDetector: FormDetector,
     private val dialogController: DialogController,
-    private val smsOtpReader: SmsOtpReader
+    private val smsOtpReader: SmsOtpReader,
+    private val pluginRegistry: PluginRegistry,
+    private val tunnelManager: TunnelManager,
+    private val sessionRecorder: SessionRecorder,
+    private val networkMonitor: NetworkMonitor
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private var server: ApplicationEngine? = null
+    private var appContext: Context? = null
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
+    private val _connectedSince = MutableStateFlow(0L)
+    val connectedSince: StateFlow<Long> = _connectedSince.asStateFlow()
+
     private val pairingCode = "vayu1234"
+
+    fun setContext(ctx: Context) {
+        appContext = ctx.applicationContext
+    }
 
     fun start() {
         if (server != null) {
@@ -101,6 +120,7 @@ class McpServer(
                         }
 
                         // Step 3: Auth success
+                        _connectedSince.value = System.currentTimeMillis()
                         Logger.i("Auth successful for session: $sessionId")
                         val successMsg = json.encodeToString(
                             AuthSuccess(type = "auth_success", sessionId = sessionId)
@@ -132,6 +152,7 @@ class McpServer(
         server?.stop(1000, 2000)
         server = null
         _isRunning.value = false
+        _connectedSince.value = 0L
         Logger.i("MCP Server stopped")
     }
 
@@ -182,6 +203,12 @@ class McpServer(
     }
 
     private suspend fun handleToolCall(id: String, tool: String, args: JsonObject): String {
+        // Record tool call if recording is active
+        val argsMap = args.entries.associate { entry ->
+            entry.key to (entry.value.jsonPrimitive.contentOrNull ?: entry.value.toString())
+        }
+        sessionRecorder.recordCommand(tool, argsMap)
+
         return try {
             val result: String = when (tool) {
                 // ===== Phase 1: Browser DOM Tools =====
@@ -468,6 +495,153 @@ class McpServer(
                     dialogController.dismissDialog(wv)
                 }
 
+                // ===== Phase 4: Plugin Tools =====
+                "plugin_list" -> {
+                    val plugins = pluginRegistry.allPlugins.value
+                    val result = plugins.map { p ->
+                        mapOf(
+                            "name" to p.name,
+                            "version" to p.version,
+                            "description" to p.description,
+                            "enabled" to p.enabled.toString(),
+                            "sites" to p.sites.joinToString(", "),
+                            "toolCount" to p.tools.size.toString()
+                        )
+                    }
+                    json.encodeToString(result)
+                }
+
+                "plugin_enable" -> {
+                    val name = args["name"]?.jsonPrimitive?.content ?: ""
+                    pluginRegistry.enablePlugin(name)
+                    """{"success":true,"name":"$name","enabled":true}"""
+                }
+
+                "plugin_disable" -> {
+                    val name = args["name"]?.jsonPrimitive?.content ?: ""
+                    pluginRegistry.disablePlugin(name)
+                    """{"success":true,"name":"$name","enabled":false}"""
+                }
+
+                // ===== Phase 4: Tunnel Tools =====
+                "tunnel_start" -> {
+                    val url = tunnelManager.startTunnel()
+                    """{"success":true,"url":"$url"}"""
+                }
+
+                "tunnel_stop" -> {
+                    tunnelManager.stopTunnel()
+                    """{"success":true,"stopped":true}"""
+                }
+
+                "tunnel_get_url" -> {
+                    val url = tunnelManager.tunnelUrl.value
+                    if (url != null) {
+                        """{"active":true,"url":"$url"}"""
+                    } else {
+                        """{"active":false,"url":null}"""
+                    }
+                }
+
+                // ===== Phase 4: Recording Tools =====
+                "recording_start" -> {
+                    val name = args["name"]?.jsonPrimitive?.content ?: "Untitled"
+                    sessionRecorder.startRecording(name)
+                    """{"success":true,"name":"$name","recording":true}"""
+                }
+
+                "recording_stop" -> {
+                    val recording = sessionRecorder.stopRecording()
+                    json.encodeToString(recording)
+                }
+
+                "recording_list" -> {
+                    val recordings = sessionRecorder.listRecordings()
+                    json.encodeToString(recordings)
+                }
+
+                "recording_replay" -> {
+                    val recordingId = args["id"]?.jsonPrimitive?.content ?: ""
+                    sessionRecorder.replayRecording(recordingId) { toolName, toolArgs ->
+                        handleRecordingReplayTool(toolName, toolArgs)
+                    }
+                }
+
+                "recording_delete" -> {
+                    val recordingId = args["id"]?.jsonPrimitive?.content ?: ""
+                    sessionRecorder.deleteRecording(recordingId)
+                    """{"success":true,"deleted":"$recordingId"}"""
+                }
+
+                // ===== Phase 4: Session Save/Load Tools =====
+                "session_save" -> {
+                    val sessionName = args["name"]?.jsonPrimitive?.content ?: "default"
+                    saveSession(sessionName)
+                }
+
+                "session_load" -> {
+                    val sessionName = args["name"]?.jsonPrimitive?.content ?: "default"
+                    loadSession(sessionName)
+                }
+
+                // ===== Phase 4: User Agent Tool =====
+                "user_agent_set" -> {
+                    val userAgent = args["userAgent"]?.jsonPrimitive?.content ?: ""
+                    val effectiveUa = StealthController.USER_AGENT_PRESETS[userAgent] ?: userAgent
+                    val wv = resolveWebView(null)
+                    if (wv != null) {
+                        StealthController.setUserAgent(wv, effectiveUa)
+                        // Apply to all tab WebViews
+                        tabManager.tabs.value.forEach { tab ->
+                            tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                StealthController.setUserAgent(tabWv, effectiveUa)
+                            }
+                        }
+                        """{"success":true,"userAgent":"${effectiveUa.take(80)}..."}"""
+                    } else {
+                        """{"success":false,"error":"No WebView available"}"""
+                    }
+                }
+
+                // ===== Phase 4: Stealth Tools =====
+                "stealth_enable" -> {
+                    val wv = resolveWebView(null)
+                    if (wv != null) {
+                        StealthController.applyStealthMode(wv)
+                        tabManager.tabs.value.forEach { tab ->
+                            tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                StealthController.applyStealthMode(tabWv)
+                            }
+                        }
+                        """{"success":true,"stealthEnabled":true}"""
+                    } else {
+                        """{"success":false,"error":"No WebView available"}"""
+                    }
+                }
+
+                "stealth_disable" -> {
+                    val wv = resolveWebView(null)
+                    if (wv != null) {
+                        StealthController.removeStealthMode(wv)
+                        tabManager.tabs.value.forEach { tab ->
+                            tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                StealthController.removeStealthMode(tabWv)
+                            }
+                        }
+                        """{"success":true,"stealthEnabled":false}"""
+                    } else {
+                        """{"success":false,"error":"No WebView available"}"""
+                    }
+                }
+
+                // ===== Phase 4: Browser Info Tool =====
+                "browser_info" -> {
+                    val tunnelUrl = tunnelManager.tunnelUrl.value
+                    val pluginCount = pluginRegistry.activePlugins.value.size
+                    val tabCount = tabManager.tabs.value.size
+                    """{"appVersion":"1.0.0-alpha","tabCount":$tabCount,"connectedSince":${_connectedSince.value},"tunnelUrl":${if (tunnelUrl != null) "\"$tunnelUrl\"" else "null"},"pluginCount":$pluginCount,"platform":"android","networkConnected":${networkMonitor.isConnected.value}}"""
+                }
+
                 else -> {
                     """{"error":"Unknown tool: $tool"}"""
                 }
@@ -492,6 +666,77 @@ class McpServer(
                 )
             )
         }
+    }
+
+    private suspend fun handleRecordingReplayTool(tool: String, args: Map<String, String>): String {
+        val jsonArgs = buildJsonObject {
+            args.forEach { (key, value) ->
+                put(key, value)
+            }
+        }
+        return try {
+            when (tool) {
+                "browser_navigate" -> domController.navigate(args["url"] ?: "", args["tabId"]?.toIntOrNull())
+                "browser_query_selector" -> domController.querySelector(args["selector"] ?: "", args["all"]?.toBoolean() ?: false, args["tabId"]?.toIntOrNull())
+                "browser_click" -> domController.click(args["selector"] ?: "", args["index"]?.toIntOrNull() ?: 0, args["tabId"]?.toIntOrNull())
+                "browser_type" -> domController.type(args["selector"] ?: "", args["text"] ?: "", args["clearFirst"]?.toBoolean() ?: false, args["tabId"]?.toIntOrNull())
+                "browser_evaluate" -> domController.evaluate(args["script"] ?: "", args["tabId"]?.toIntOrNull())
+                else -> """{"replayed":true,"tool":"$tool"}"""
+            }
+        } catch (e: Exception) {
+            """{"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    private fun saveSession(name: String): String {
+        val ctx = appContext ?: return """{"error":"No context available"}"""
+        val prefs = ctx.getSharedPreferences("vayu_sessions", Context.MODE_PRIVATE)
+        val tabs = tabManager.tabs.value
+
+        val sessionData = mutableMapOf<String, String>()
+        tabs.forEachIndexed { index, tabState ->
+            sessionData["tab_${index}_url"] = tabState.url
+            sessionData["tab_${index}_title"] = tabState.title
+        }
+        sessionData["tab_count"] = tabs.size.toString()
+
+        prefs.edit().apply {
+            putString("session_${name}_count", tabs.size.toString())
+            tabs.forEachIndexed { index, tabState ->
+                putString("session_${name}_tab_${index}_url", tabState.url)
+                putString("session_${name}_tab_${index}_title", tabState.title)
+            }
+            apply()
+        }
+
+        Logger.i("Session saved: $name with ${tabs.size} tabs")
+        return """{"success":true,"name":"$name","tabCount":${tabs.size}}"""
+    }
+
+    private fun loadSession(name: String): String {
+        val ctx = appContext ?: return """{"error":"No context available"}"""
+        val prefs = ctx.getSharedPreferences("vayu_sessions", Context.MODE_PRIVATE)
+        val tabCount = prefs.getString("session_${name}_count", "0")?.toIntOrNull() ?: 0
+
+        if (tabCount == 0) {
+            return """{"error":"Session '$name' not found"}"""
+        }
+
+        // Close existing tabs
+        val existingTabs = tabManager.tabs.value.toList()
+        existingTabs.forEach { tabManager.closeTab(it.tabId) }
+
+        // Restore tabs
+        for (i in 0 until tabCount) {
+            val url = prefs.getString("session_${name}_tab_${i}_url", "") ?: ""
+            val background = i > 0
+            if (url.isNotEmpty()) {
+                tabManager.newTab(url, background)
+            }
+        }
+
+        Logger.i("Session loaded: $name with $tabCount tabs")
+        return """{"success":true,"name":"$name","tabCount":$tabCount}"""
     }
 
     private suspend fun handleTabExecute(tabId: Int, subTool: String, subArgs: JsonObject): String {
@@ -555,7 +800,7 @@ class McpServer(
         if (activeId != -1) {
             return tabManager.getTab(activeId)
         }
-        return com.vayu.agenticbrowser.engine.WebViewManager.getInstance().getWebView()
+        return WebViewManager.getInstance().getWebView()
     }
 
     private fun sha256Hex(input: String): String {
@@ -563,8 +808,6 @@ class McpServer(
         val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
         return hashBytes.joinToString("") { "%02x".format(it) }
     }
-
-    // Serializable message types
 
     @Serializable
     data class AuthChallenge(val type: String, val nonce: String)
