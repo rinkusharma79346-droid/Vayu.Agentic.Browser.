@@ -2,10 +2,16 @@ package com.vayu.agenticbrowser.di
 
 import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
+import com.vayu.agenticbrowser.engine.DialogController
 import com.vayu.agenticbrowser.engine.DomController
+import com.vayu.agenticbrowser.engine.FormDetector
 import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.vault.BiometricAuth
+import com.vayu.agenticbrowser.vault.CredentialVault
+import com.vayu.agenticbrowser.vault.ProfileManager
+import com.vayu.agenticbrowser.vault.SmsOtpReader
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -36,6 +42,24 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideProfileManager(): ProfileManager {
+        return ProfileManager.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBiometricAuth(): BiometricAuth {
+        return BiometricAuth.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSmsOtpReader(): SmsOtpReader {
+        return SmsOtpReader.getInstance()
+    }
+
+    @Provides
+    @Singleton
     fun provideDomController(
         webViewManager: WebViewManager,
         tabManager: TabManager
@@ -54,12 +78,46 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideFormDetector(
+        domController: DomController
+    ): FormDetector {
+        return FormDetector(domController)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDialogController(): DialogController {
+        return DialogController()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCredentialVault(
+        profileManager: ProfileManager,
+        biometricAuth: BiometricAuth,
+        domController: DomController,
+        tabManager: TabManager
+    ): CredentialVault {
+        return CredentialVault(profileManager, biometricAuth, domController, tabManager)
+    }
+
+    @Provides
+    @Singleton
     fun provideMcpServer(
         domController: DomController,
         tabManager: TabManager,
         downloadManager: VayuDownloadManager,
-        waitController: WaitController
+        waitController: WaitController,
+        credentialVault: CredentialVault,
+        profileManager: ProfileManager,
+        biometricAuth: BiometricAuth,
+        formDetector: FormDetector,
+        dialogController: DialogController,
+        smsOtpReader: SmsOtpReader
     ): McpServer {
-        return McpServer(domController, tabManager, downloadManager, waitController)
+        return McpServer(
+            domController, tabManager, downloadManager, waitController,
+            credentialVault, profileManager, biometricAuth, formDetector, dialogController, smsOtpReader
+        )
     }
 }

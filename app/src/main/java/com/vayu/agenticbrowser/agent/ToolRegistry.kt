@@ -211,6 +211,86 @@ object ToolRegistry {
                 "selector" to ToolParam(type = "string", description = "A valid CSS selector to identify the element to screenshot", required = true),
                 "tabId" to ToolParam(type = "integer", description = "Optional tab ID to screenshot. Defaults to the active tab.", required = false)
             )
+        ),
+
+        // ===== Phase 3: Vault Tools =====
+        ToolDef(
+            name = "vault_list_profiles",
+            description = "List all saved credential profiles in the VAYU Vault. Returns profile names, site URLs, and usernames without exposing passwords. Requires biometric unlock.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "vault_use_profile",
+            description = "Get details of a specific vault profile by ID, including decrypted TOTP code if configured. Passwords are never returned. Requires biometric unlock.",
+            parameters = mapOf(
+                "profileId" to ToolParam(type = "string", description = "The ID of the profile to retrieve", required = true)
+            )
+        ),
+        ToolDef(
+            name = "vault_fill_login",
+            description = "Automatically fill login form fields on the current page using the best matching vault profile for the site URL. Detects email/username and password fields. Requires biometric unlock.",
+            parameters = mapOf(
+                "siteUrl" to ToolParam(type = "string", description = "The site URL to match against saved profiles (defaults to current page URL)", required = false),
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to fill login in. Defaults to the active tab.", required = false)
+            )
+        ),
+        ToolDef(
+            name = "vault_get_otp",
+            description = "Generate a TOTP code from a profile's stored seed, or read the latest SMS OTP. Requires biometric unlock.",
+            parameters = mapOf(
+                "profileId" to ToolParam(type = "string", description = "The ID of the profile with TOTP seed configured", required = false),
+                "sms" to ToolParam(type = "boolean", description = "If true, reads OTP from SMS inbox instead of TOTP (default: false)", required = false),
+                "timeoutMs" to ToolParam(type = "integer", description = "Timeout for SMS OTP reading in milliseconds (default: 60000)", required = false)
+            )
+        ),
+        ToolDef(
+            name = "vault_save_cookies",
+            description = "Save the current page cookies to a vault profile for session persistence. Requires biometric unlock.",
+            parameters = mapOf(
+                "profileId" to ToolParam(type = "string", description = "The ID of the profile to save cookies to", required = true),
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to read cookies from. Defaults to the active tab.", required = false)
+            )
+        ),
+
+        // ===== Phase 3: Form Tools =====
+        ToolDef(
+            name = "form_detect",
+            description = "Detect all form input elements on the current page. Returns an array of fields with their selectors, types, names, placeholders, and visibility status.",
+            parameters = mapOf(
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to detect forms in. Defaults to the active tab.", required = false)
+            )
+        ),
+        ToolDef(
+            name = "form_fill",
+            description = "Fill multiple form fields at once using a mapping of CSS selectors to values. Optionally submit the form after filling.",
+            parameters = mapOf(
+                "mapping" to ToolParam(type = "object", description = "A mapping of CSS selector strings to values to fill in each field", required = true),
+                "submitSelector" to ToolParam(type = "string", description = "Optional CSS selector for the submit button to click after filling", required = false),
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to fill form in. Defaults to the active tab.", required = false)
+            )
+        ),
+
+        // ===== Phase 3: Dialog Tools =====
+        ToolDef(
+            name = "dialog_detect",
+            description = "Detect modal dialogs, cookie banners, and popup overlays on the current page. Returns the type and visible text of any detected dialog.",
+            parameters = mapOf(
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to check for dialogs. Defaults to the active tab.", required = false)
+            )
+        ),
+        ToolDef(
+            name = "dialog_accept",
+            description = "Accept or dismiss a detected dialog by clicking the first visible button matching accept/OK/allow/agree patterns.",
+            parameters = mapOf(
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to accept dialog in. Defaults to the active tab.", required = false)
+            )
+        ),
+        ToolDef(
+            name = "dialog_dismiss",
+            description = "Dismiss a detected dialog by clicking the first visible button matching reject/cancel/close/decline patterns.",
+            parameters = mapOf(
+                "tabId" to ToolParam(type = "integer", description = "Optional tab ID to dismiss dialog in. Defaults to the active tab.", required = false)
+            )
         )
     )
 

@@ -101,6 +101,9 @@ dependencies {
     // Material3
     implementation("com.google.android.material:material:1.12.0")
 
+    // AndroidX Biometric
+    implementation("androidx.biometric:biometric:1.1.0")
+
     // JavaPoet workaround for Hilt + KSP
     implementation("com.squareup:javapoet:1.13.0")
 }

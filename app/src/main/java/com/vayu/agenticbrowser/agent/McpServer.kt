@@ -2,10 +2,17 @@ package com.vayu.agenticbrowser.agent
 
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
+import com.vayu.agenticbrowser.engine.DialogController
 import com.vayu.agenticbrowser.engine.DomController
+import com.vayu.agenticbrowser.engine.FormDetector
 import com.vayu.agenticbrowser.engine.ScreenshotUtil
 import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.vault.BiometricAuth
+import com.vayu.agenticbrowser.vault.CredentialVault
+import com.vayu.agenticbrowser.vault.ProfileManager
+import com.vayu.agenticbrowser.vault.SmsOtpReader
+import com.vayu.agenticbrowser.vault.TotpGenerator
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
@@ -25,7 +32,13 @@ class McpServer(
     private val domController: DomController,
     private val tabManager: TabManager,
     private val downloadManager: VayuDownloadManager,
-    private val waitController: WaitController
+    private val waitController: WaitController,
+    private val credentialVault: CredentialVault,
+    private val profileManager: ProfileManager,
+    private val biometricAuth: BiometricAuth,
+    private val formDetector: FormDetector,
+    private val dialogController: DialogController,
+    private val smsOtpReader: SmsOtpReader
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -317,6 +330,142 @@ class McpServer(
                     val wv = resolveWebView(tabId)
                         ?: return """{"success":false,"error":"No WebView available"}"""
                     ScreenshotUtil.screenshotElement(wv, selector)
+                }
+
+                // ===== Phase 3: Vault Tools =====
+                "vault_list_profiles" -> {
+                    if (!biometricAuth.requireUnlock()) {
+                        """{"error":"AUTH_REQUIRED","message":"Vault is locked. Biometric authentication required."}"""
+                    } else {
+                        json.encodeToString(profileManager.listProfiles())
+                    }
+                }
+
+                "vault_use_profile" -> {
+                    if (!biometricAuth.requireUnlock()) {
+                        """{"error":"AUTH_REQUIRED","message":"Vault is locked. Biometric authentication required."}"""
+                    } else {
+                        val profileId = args["profileId"]?.jsonPrimitive?.content ?: ""
+                        val profile = profileManager.getProfile(profileId)
+                        if (profile != null) {
+                            val totpCode = profile.encryptedTotpSeed?.let { seed ->
+                                try {
+                                    val decryptedSeed = com.vayu.agenticbrowser.vault.CryptoUtils.decrypt(
+                                        seed, "vayu_vault_key"
+                                    )
+                                    TotpGenerator.generate(decryptedSeed)
+                                } catch (e: Exception) { null }
+                            }
+                            val safeProfile = profile.copy(
+                                encryptedPassword = "***",
+                                encryptedBackupCodes = null
+                            )
+                            val profileJson = json.encodeToString(safeProfile).dropLast(1)
+                            val totpJson = totpCode?.let { ""","totpCode":"$it","totpSecondsRemaining":${TotpGenerator.getSecondsRemaining()}""" } ?: ""
+                            """${profileJson}$totpJson}"""
+                        } else {
+                            """{"error":"Profile $profileId not found"}"""
+                        }
+                    }
+                }
+
+                "vault_fill_login" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"error":"No WebView available"}"""
+                    val siteUrl = args["siteUrl"]?.jsonPrimitive?.content ?: wv.url ?: ""
+                    credentialVault.fillLoginForm(siteUrl, wv)
+                }
+
+                "vault_get_otp" -> {
+                    if (!biometricAuth.requireUnlock()) {
+                        """{"error":"AUTH_REQUIRED","message":"Vault is locked. Biometric authentication required."}"""
+                    } else {
+                        val useSms = args["sms"]?.jsonPrimitive?.booleanOrNull ?: false
+                        if (useSms) {
+                            val timeoutMs = args["timeoutMs"]?.jsonPrimitive?.longOrNull ?: 60_000L
+                            val otp = smsOtpReader.readLatestOtp(timeoutMs)
+                            if (otp != null) {
+                                """{"otp":"$otp","source":"sms"}"""
+                            } else {
+                                """{"error":"No SMS OTP found within timeout"}"""
+                            }
+                        } else {
+                            val profileId = args["profileId"]?.jsonPrimitive?.content ?: ""
+                            val seed = credentialVault.getDecryptedTotpSeed(profileId)
+                            if (seed != null) {
+                                val code = TotpGenerator.generate(seed)
+                                val remaining = TotpGenerator.getSecondsRemaining()
+                                """{"otp":"$code","source":"totp","secondsRemaining":$remaining}"""
+                            } else {
+                                """{"error":"No TOTP seed found for profile $profileId"}"""
+                            }
+                        }
+                    }
+                }
+
+                "vault_save_cookies" -> {
+                    if (!biometricAuth.requireUnlock()) {
+                        """{"error":"AUTH_REQUIRED","message":"Vault is locked. Biometric authentication required."}"""
+                    } else {
+                        val profileId = args["profileId"]?.jsonPrimitive?.content ?: ""
+                        val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                        val wv = resolveWebView(tabId)
+                            ?: return """{"error":"No WebView available"}"""
+
+                        val cookiesResult = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                            wv.evaluateJavascript("document.cookie") { result -> cont.resume(result) {} }
+                        }
+
+                        val cookiesJson = cookiesResult?.let { """{"cookies":$it}""" } ?: "{}"
+                        val profile = profileManager.getProfile(profileId)
+                        if (profile != null) {
+                            profileManager.saveProfile(profile.copy(savedCookiesJson = cookiesJson))
+                            """{"success":true,"profileId":"$profileId"}"""
+                        } else {
+                            """{"error":"Profile $profileId not found"}"""
+                        }
+                    }
+                }
+
+                // ===== Phase 3: Form Tools =====
+                "form_detect" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"error":"No WebView available"}"""
+                    formDetector.detectForms(wv)
+                }
+
+                "form_fill" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"error":"No WebView available"}"""
+                    val mappingObj = args["mapping"]?.jsonObject ?: buildJsonObject {}
+                    val mapping = mappingObj.entries.associate { it.key to it.value.jsonPrimitive.content }
+                    val submitSelector = args["submitSelector"]?.jsonPrimitive?.contentOrNull
+                    formDetector.fillForm(mapping, submitSelector, wv)
+                }
+
+                // ===== Phase 3: Dialog Tools =====
+                "dialog_detect" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"detected":false,"error":"No WebView available"}"""
+                    dialogController.detectDialog(wv)
+                }
+
+                "dialog_accept" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"success":false,"error":"No WebView available"}"""
+                    dialogController.acceptDialog(wv)
+                }
+
+                "dialog_dismiss" -> {
+                    val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
+                    val wv = resolveWebView(tabId)
+                        ?: return """{"success":false,"error":"No WebView available"}"""
+                    dialogController.dismissDialog(wv)
                 }
 
                 else -> {

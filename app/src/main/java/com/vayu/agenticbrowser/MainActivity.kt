@@ -17,6 +17,8 @@ import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.tabs.TabManager
 import com.vayu.agenticbrowser.ui.screens.BrowserScreen
 import com.vayu.agenticbrowser.ui.theme.VAYUTheme
+import com.vayu.agenticbrowser.vault.ProfileManager
+import com.vayu.agenticbrowser.vault.SmsOtpReader
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var downloadManager: VayuDownloadManager
 
+    @Inject
+    lateinit var profileManager: ProfileManager
+
+    @Inject
+    lateinit var smsOtpReader: SmsOtpReader
+
     private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,6 +55,8 @@ class MainActivity : ComponentActivity() {
         // Initialize managers with context
         tabManager.init(applicationContext)
         downloadManager.init(applicationContext)
+        profileManager.init(applicationContext)
+        smsOtpReader.init(applicationContext)
 
         // Start MCP server on app launch
         activityScope.launch(Dispatchers.IO) {

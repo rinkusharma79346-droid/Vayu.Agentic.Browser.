@@ -26,6 +26,7 @@ import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.tabs.TabManager
 import com.vayu.agenticbrowser.tabs.TabState
+import com.vayu.agenticbrowser.ui.components.AgentDashboard
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,6 +184,15 @@ fun BrowserScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+
+            // Agent Dashboard floating overlay
+            AgentDashboard(
+                agentConnected = agentConnected,
+                lastToolName = "",
+                tabCount = tabs.size,
+                activeTabIndex = tabs.indexOfFirst { it.tabId == activeTabId }.coerceAtLeast(0),
+                downloadManager = downloadMgr
+            )
         }
 
         // Status Bar
