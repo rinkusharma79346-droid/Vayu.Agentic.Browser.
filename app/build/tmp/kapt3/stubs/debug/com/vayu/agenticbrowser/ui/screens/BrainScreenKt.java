@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow;
 import com.vayu.agenticbrowser.agent.McpConfig;
 import com.vayu.agenticbrowser.agent.McpServer;
 import com.vayu.agenticbrowser.agent.McpStatus;
+import com.vayu.agenticbrowser.agent.RelayStatus;
 import com.vayu.agenticbrowser.brain.*;
 import com.vayu.agenticbrowser.common.Logger;
 import kotlinx.coroutines.Dispatchers;

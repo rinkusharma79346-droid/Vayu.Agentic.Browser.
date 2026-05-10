@@ -7,8 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.*
 import okhttp3.*
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -54,9 +53,6 @@ class RelayClient(
     /** Maximum reconnect attempts before giving up */
     private val maxReconnectAttempts = 10
 
-    /** Pending relay requests waiting for local McpServer response */
-    private val pendingRelayRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
-
     /** Heartbeat job */
     private var heartbeatJob: Job? = null
 
@@ -65,8 +61,6 @@ class RelayClient(
 
     /**
      * Connect to the Render MCP Relay Server via WebSocket.
-     *
-     * @param relayUrl WebSocket URL (e.g., wss://j-a-r-v-i-s-ktlh.onrender.com/relay)
      */
     fun connect(relayUrl: String = buildRelayUrl()) {
         if (_connected.value) {
@@ -82,7 +76,7 @@ class RelayClient(
 
         httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS)    // No read timeout for persistent WS
+            .readTimeout(0, TimeUnit.MILLISECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
             .pingInterval(30, TimeUnit.SECONDS)
             .build()
@@ -95,7 +89,6 @@ class RelayClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Logger.i("RelayClient: WebSocket connection opened")
                 _status.value = RelayStatus.AUTHENTICATING
-                // Auth will be initiated by server — we wait for auth_challenge
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -105,7 +98,7 @@ class RelayClient(
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Logger.i("RelayClient: Server closing connection (code=$code, reason=$reason)")
+                Logger.i("RelayClient: Server closing connection (code=$code)")
                 webSocket.close(1000, "Goodbye")
             }
 
@@ -129,7 +122,6 @@ class RelayClient(
         autoReconnect = false
         reconnectJob?.cancel()
         heartbeatJob?.cancel()
-        pendingRelayRequests.clear()
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null
         _connected.value = false
@@ -142,7 +134,7 @@ class RelayClient(
      */
     private suspend fun handleServerMessage(text: String) {
         try {
-            val message = json.parseToJsonElement(text).jsonObject
+            val message = Json.parseToJsonElement(text).jsonObject
             val type = message["type"]?.jsonPrimitive?.content ?: return
 
             when (type) {
@@ -164,7 +156,6 @@ class RelayClient(
 
     /**
      * Handle auth challenge from the server.
-     * Compute SHA-256(pairingCode + nonce) and send auth_response.
      */
     private fun handleAuthChallenge(message: JsonObject) {
         val nonce = message["nonce"]?.jsonPrimitive?.content ?: return
@@ -196,10 +187,7 @@ class RelayClient(
         reconnectAttempts = 0
         Logger.i("RelayClient: Authenticated with relay server (browserId=$browserId)")
 
-        // Send tool list
         sendToolList()
-
-        // Start heartbeat
         startHeartbeat()
     }
 
@@ -216,7 +204,7 @@ class RelayClient(
     }
 
     /**
-     * Handle a relay request from the server (originating from Claude AI).
+     * Handle a relay request from the server.
      * Forward to local McpServer and send response back.
      */
     private suspend fun handleRelayRequest(message: JsonObject) {
@@ -226,10 +214,8 @@ class RelayClient(
         Logger.d("RelayClient: Relay request received (requestId=$requestId)")
 
         try {
-            // Forward to local MCP server
             val response = mcpServer.handleMessage(payload)
 
-            // Send response back to relay server
             val relayResponse = json.encodeToString(RelayResponse(
                 type = "relay_response",
                 requestId = requestId,
@@ -255,9 +241,12 @@ class RelayClient(
     private fun sendToolList() {
         try {
             val toolsJson = ToolRegistry.toJson()
+            val toolsArray = Json.parseToJsonElement(toolsJson).jsonArray
+            val toolStrings = toolsArray.map { element -> element.toString() }
+
             val msg = json.encodeToString(ToolListMessage(
                 type = "tool_list",
-                tools = json.parseToJsonElement(toolsJson).jsonArray.map { it.toString() },
+                tools = toolStrings,
             ))
             webSocket?.send(msg)
             Logger.d("RelayClient: Sent tool list to relay server")
@@ -314,14 +303,13 @@ class RelayClient(
 
     /**
      * Build the WebSocket relay URL from the Render SSE URL.
-     * Converts https://.../sse → wss://.../relay
      */
     private fun buildRelayUrl(): String {
         val sseUrl = McpConfig.RENDER_SSE_URL
         return sseUrl
             .replace("https://", "wss://")
             .replace("http://", "ws://")
-            .replace("/sse$", "/relay")
+            .replace(Regex("/sse$"), "/relay")
     }
 
     /**
@@ -340,37 +328,11 @@ class RelayClient(
         }
     }
 
-    /**
-     * Send a status update to the relay server.
-     */
-    fun sendStatusUpdate(status: Map<String, Any>) {
-        if (!_connected.value) return
-        try {
-            val msg = buildJsonObject {
-                put("type", "status")
-                status.forEach { (key, value) ->
-                    when (value) {
-                        is String -> put(key, value)
-                        is Number -> put(key, value.toDouble())
-                        is Boolean -> put(key, value)
-                    }
-                }
-            }
-            webSocket?.send(json.encodeToString(msg))
-        } catch (e: Exception) {
-            Logger.e("RelayClient: Failed to send status", e)
-        }
-    }
-
     companion object {
         private fun sha256Hex(input: String): String {
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(input.toByteArray())
             return digest.joinToString("") { "%02x".format(it) }
-        }
-
-        private fun buildJsonObject(block: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit): JsonObject {
-            return kotlinx.serialization.json.buildJsonObject(block)
         }
     }
 }

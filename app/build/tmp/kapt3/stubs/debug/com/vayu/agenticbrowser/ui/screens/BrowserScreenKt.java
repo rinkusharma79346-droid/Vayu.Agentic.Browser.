@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment;
 import androidx.compose.ui.Modifier;
 import androidx.compose.ui.text.input.ImeAction;
 import androidx.compose.ui.text.style.TextOverflow;
+import com.vayu.agenticbrowser.agent.McpConfig;
 import com.vayu.agenticbrowser.agent.McpStatus;
 import com.vayu.agenticbrowser.agent.SessionRecorder;
 import com.vayu.agenticbrowser.downloads.DownloadStatus;

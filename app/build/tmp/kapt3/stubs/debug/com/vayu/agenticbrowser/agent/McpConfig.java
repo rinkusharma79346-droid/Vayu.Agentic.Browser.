@@ -50,7 +50,7 @@ public final class McpConfig {
      * App version
      */
     @org.jetbrains.annotations.NotNull()
-    public static final java.lang.String APP_VERSION = "1.1.0";
+    public static final java.lang.String APP_VERSION = "1.3.0";
     @org.jetbrains.annotations.NotNull()
     public static final com.vayu.agenticbrowser.agent.McpConfig INSTANCE = null;
     
