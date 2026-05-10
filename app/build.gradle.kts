@@ -112,6 +112,9 @@ dependencies {
 
     // OkHttp for Brain LLM client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // JSch for SSH tunnel (remote port forwarding to Claude / AI)
+    implementation("com.github.mwiede:jsch:0.2.16")
 }
 
 kapt {

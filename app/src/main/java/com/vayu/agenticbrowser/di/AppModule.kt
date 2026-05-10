@@ -16,6 +16,7 @@ import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.tunnel.SshTunnelManager
 import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.vault.BiometricAuth
 import com.vayu.agenticbrowser.vault.CredentialVault
@@ -40,6 +41,7 @@ object AppModule {
     @Provides @Singleton fun provideSmsOtpReader(): SmsOtpReader = SmsOtpReader.getInstance()
     @Provides @Singleton fun providePluginRegistry(): PluginRegistry = PluginRegistry.getInstance()
     @Provides @Singleton fun provideTunnelManager(): TunnelManager = TunnelManager.getInstance()
+    @Provides @Singleton fun provideSshTunnelManager(): SshTunnelManager = SshTunnelManager.getInstance()
     @Provides @Singleton fun provideSessionRecorder(): SessionRecorder = SessionRecorder.getInstance()
     @Provides @Singleton fun provideNetworkMonitor(): NetworkMonitor = NetworkMonitor.getInstance()
     @Provides @Singleton fun provideGoalScheduler(): GoalScheduler = GoalScheduler.getInstance()
@@ -73,11 +75,13 @@ object AppModule {
         biometricAuth: BiometricAuth, formDetector: FormDetector,
         dialogController: DialogController, smsOtpReader: SmsOtpReader,
         pluginRegistry: PluginRegistry, tunnelManager: TunnelManager,
-        sessionRecorder: SessionRecorder, networkMonitor: NetworkMonitor
+        sessionRecorder: SessionRecorder, networkMonitor: NetworkMonitor,
+        sshTunnelManager: SshTunnelManager
     ): McpServer = McpServer(
         domController, tabManager, downloadManager, waitController,
         credentialVault, profileManager, biometricAuth, formDetector, dialogController,
-        smsOtpReader, pluginRegistry, tunnelManager, sessionRecorder, networkMonitor
+        smsOtpReader, pluginRegistry, tunnelManager, sessionRecorder, networkMonitor,
+        sshTunnelManager
     )
 
     @Provides @Singleton

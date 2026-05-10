@@ -472,6 +472,46 @@ object ToolRegistry {
                 "description" to ToolParam(type = "string", description = "A brief description of what the workflow does", required = true),
                 "goalPrompt" to ToolParam(type = "string", description = "The goal prompt that the autonomous agent will execute when this workflow is run", required = true)
             )
+        ),
+
+        // ===== Phase 6: SSH Tunnel Tools (Claude / AI Connectivity) =====
+        ToolDef(
+            name = "ssh_tunnel_start",
+            description = "Start an SSH remote port forwarding tunnel to expose the local MCP server to AI assistants like Claude. Creates a reverse tunnel (-R) so that remote AI clients connecting to the SSH server's port are forwarded back to the phone's MCP server. Supports password and private key authentication.",
+            parameters = mapOf(
+                "host" to ToolParam(type = "string", description = "SSH server hostname or IP address", required = true),
+                "port" to ToolParam(type = "integer", description = "SSH server port (default: 22)", required = false),
+                "username" to ToolParam(type = "string", description = "SSH username for authentication", required = true),
+                "authType" to ToolParam(type = "string", description = "Authentication type: 'password' or 'key'", required = false),
+                "password" to ToolParam(type = "string", description = "SSH password (used when authType is 'password')", required = false),
+                "privateKey" to ToolParam(type = "string", description = "SSH private key in PEM format (used when authType is 'key')", required = false),
+                "remotePort" to ToolParam(type = "integer", description = "Remote port on the SSH server to forward (default: 8765). AI clients connect to ssh-server:remotePort.", required = false),
+                "localPort" to ToolParam(type = "integer", description = "Local MCP server port to forward from (default: 8765)", required = false)
+            )
+        ),
+        ToolDef(
+            name = "ssh_tunnel_stop",
+            description = "Stop the active SSH tunnel and disconnect from the SSH server. This removes the remote port forwarding.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "ssh_tunnel_status",
+            description = "Get the current SSH tunnel status including whether it's running, the tunnel URL, the SSE and WebSocket endpoints that AI clients should connect to, and any errors.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "ssh_tunnel_config",
+            description = "Get or update the SSH tunnel configuration. When called without arguments, returns the current config. When called with arguments, updates and saves the config for future use.",
+            parameters = mapOf(
+                "host" to ToolParam(type = "string", description = "SSH server hostname or IP address", required = false),
+                "port" to ToolParam(type = "integer", description = "SSH server port", required = false),
+                "username" to ToolParam(type = "string", description = "SSH username", required = false),
+                "authType" to ToolParam(type = "string", description = "Authentication type: 'password' or 'key'", required = false),
+                "password" to ToolParam(type = "string", description = "SSH password", required = false),
+                "privateKey" to ToolParam(type = "string", description = "SSH private key in PEM format", required = false),
+                "remotePort" to ToolParam(type = "integer", description = "Remote port on SSH server", required = false),
+                "localPort" to ToolParam(type = "integer", description = "Local MCP server port", required = false)
+            )
         )
     )
 

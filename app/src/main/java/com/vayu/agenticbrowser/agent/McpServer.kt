@@ -14,6 +14,7 @@ import com.vayu.agenticbrowser.engine.WaitController
 import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tabs.TabManager
+import com.vayu.agenticbrowser.tunnel.SshTunnelManager
 import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.vault.BiometricAuth
 import com.vayu.agenticbrowser.vault.CredentialVault
@@ -27,6 +28,8 @@ import com.vayu.agenticbrowser.brain.WorkflowEngine
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -36,8 +39,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.io.OutputStreamWriter
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 class McpServer(
     private val domController: DomController,
@@ -53,7 +59,8 @@ class McpServer(
     private val pluginRegistry: PluginRegistry,
     private val tunnelManager: TunnelManager,
     private val sessionRecorder: SessionRecorder,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val sshTunnelManager: SshTunnelManager
 ) {
 
     private lateinit var agentLoop: AgentLoop
@@ -83,6 +90,12 @@ class McpServer(
     val connectedSince: StateFlow<Long> = _connectedSince.asStateFlow()
 
     private val pairingCode = "vayu1234"
+
+    // ===== MCP SSE (JSON-RPC) Support =====
+    // Active SSE connections: sessionId -> OutputStreamWriter
+    private val sseConnections = ConcurrentHashMap<String, CopyOnWriteArrayList<OutputStreamWriter>>()
+    private var mcpInitialized = false
+    private var clientCapabilities: JsonObject = buildJsonObject {}
 
     /**
      * Direct tool execution for the AgentLoop brain.
@@ -119,12 +132,12 @@ class McpServer(
             install(WebSockets)
 
             routing {
+                // ===== Original WebSocket endpoint (custom protocol) =====
                 webSocket("/mcp") {
-                    Logger.i("New MCP client connection")
+                    Logger.i("New MCP WS client connection")
                     val sessionId = UUID.randomUUID().toString()
 
                     try {
-                        // Step 1: Auth challenge
                         val nonce = UUID.randomUUID().toString()
                         val challengeMsg = json.encodeToString(
                             AuthChallenge(type = "auth_challenge", nonce = nonce)
@@ -132,7 +145,6 @@ class McpServer(
                         send(Frame.Text(challengeMsg))
                         Logger.d("Sent auth_challenge with nonce: $nonce")
 
-                        // Step 2: Read auth response
                         val authFrame = incoming.receive()
                         val authText = (authFrame as? Frame.Text)?.readText() ?: run {
                             Logger.w("Invalid auth frame received")
@@ -145,7 +157,6 @@ class McpServer(
                         val authPayload = json.parseToJsonElement(authText).jsonObject
                         val clientHash = authPayload["hash"]?.jsonPrimitive?.content ?: ""
 
-                        // Verify SHA-256(pairingCode + nonce)
                         val expectedHash = sha256Hex(pairingCode + nonce)
                         if (clientHash != expectedHash) {
                             Logger.w("Auth failed: hash mismatch")
@@ -157,7 +168,6 @@ class McpServer(
                             return@webSocket
                         }
 
-                        // Step 3: Auth success
                         _connectedSince.value = System.currentTimeMillis()
                         Logger.i("Auth successful for session: $sessionId")
                         val successMsg = json.encodeToString(
@@ -165,7 +175,6 @@ class McpServer(
                         )
                         send(Frame.Text(successMsg))
 
-                        // Step 4: Main message loop
                         for (frame in incoming) {
                             val text = (frame as? Frame.Text)?.readText() ?: continue
                             Logger.d("Received message: $text")
@@ -176,8 +185,96 @@ class McpServer(
                     } catch (e: Exception) {
                         Logger.e("MCP WebSocket error", e)
                     } finally {
-                        Logger.i("MCP client disconnected: $sessionId")
+                        Logger.i("MCP WS client disconnected: $sessionId")
                     }
+                }
+
+                // ===== MCP SSE Endpoint (JSON-RPC spec for Claude / AI) =====
+                // GET /sse — Client opens SSE connection to receive server events
+                get("/sse") {
+                    val sseSessionId = UUID.randomUUID().toString()
+                    Logger.i("MCP SSE: New connection from Claude/AI client, sessionId=$sseSessionId")
+
+                    _connectedSince.value = System.currentTimeMillis()
+
+                    call.response.header("Cache-Control", "no-cache")
+                    call.response.header("Connection", "keep-alive")
+                    call.response.header("X-Accel-Buffering", "no")
+
+                    val outputStream = call.response.outputStream()
+                    val writer = OutputStreamWriter(outputStream)
+
+                    // Register this SSE connection
+                    sseConnections.getOrPut(sseSessionId) { CopyOnWriteArrayList() }.add(writer)
+
+                    try {
+                        // Send the endpoint event — tells the client where to POST messages
+                        val messageEndpoint = "/message?sessionId=$sseSessionId"
+                        writer.write("event: endpoint\n")
+                        writer.write("data: $messageEndpoint\n\n")
+                        writer.flush()
+                        Logger.d("MCP SSE: Sent endpoint event to $sseSessionId")
+
+                        // Keep the connection alive by sending periodic heartbeat comments
+                        while (sseConnections.containsKey(sseSessionId)) {
+                            Thread.sleep(15_000)
+                            try {
+                                writer.write(": heartbeat\n\n")
+                                writer.flush()
+                            } catch (e: Exception) {
+                                Logger.d("MCP SSE: Client disconnected: $sseSessionId")
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Logger.e("MCP SSE: Connection error", e)
+                    } finally {
+                        sseConnections.remove(sseSessionId)
+                        Logger.i("MCP SSE: Client disconnected: $sseSessionId")
+                    }
+                }
+
+                // POST /message — Client sends JSON-RPC messages here
+                post("/message") {
+                    val sessionId = call.parameters["sessionId"] ?: UUID.randomUUID().toString()
+                    val rawBody = call.receiveText()
+                    Logger.d("MCP SSE: Received message from sessionId=$sessionId: ${rawBody.take(200)}")
+
+                    try {
+                        val response = handleJsonRpcMessage(rawBody)
+
+                        // Send response as SSE event to the matching session
+                        val writers = sseConnections[sessionId]
+                        if (writers != null && writers.isNotEmpty()) {
+                            for (writer in writers) {
+                                try {
+                                    writer.write("event: message\n")
+                                    writer.write("data: $response\n\n")
+                                    writer.flush()
+                                } catch (e: Exception) {
+                                    Logger.w("MCP SSE: Failed to write to session $sessionId", e)
+                                }
+                            }
+                            call.respondText("{\"status\":\"ok\"}", ContentType.Application.Json)
+                        } else {
+                            // No active SSE connection for this session — return as HTTP response
+                            call.respondText(response, ContentType.Application.Json)
+                        }
+                    } catch (e: Exception) {
+                        Logger.e("MCP SSE: Message handling error", e)
+                        call.respondText(
+                            """{"jsonrpc":"2.0","error":{"code":-32603,"message":"${e.message?.replace("\"", "\\\"")}"},"id":null}""",
+                            ContentType.Application.Json
+                        )
+                    }
+                }
+
+                // GET /health — Health check endpoint for AI clients
+                get("/health") {
+                    call.respondText(
+                        """{"status":"ok","server":"VAYU MCP","version":"1.0.0","tools":${ToolRegistry.tools.size},"transport":["websocket","sse"],"running":${_isRunning.value}}""",
+                        ContentType.Application.Json
+                    )
                 }
             }
         }.start(wait = false)
@@ -192,6 +289,153 @@ class McpServer(
         _isRunning.value = false
         _connectedSince.value = 0L
         Logger.i("MCP Server stopped")
+    }
+
+    /**
+     * Handle MCP JSON-RPC messages (official MCP spec for Claude / AI assistants).
+     * This follows the MCP specification with methods: initialize, tools/list, tools/call, notifications.
+     */
+    private suspend fun handleJsonRpcMessage(rawMessage: String): String {
+        return try {
+            val message = json.parseToJsonElement(rawMessage).jsonObject
+            val jsonrpc = message["jsonrpc"]?.jsonPrimitive?.contentOrNull ?: "2.0"
+            val id = message["id"]
+            val method = message["method"]?.jsonPrimitive?.contentOrNull ?: ""
+            val params = message["params"]?.jsonObject ?: buildJsonObject {}
+
+            when (method) {
+                "initialize" -> {
+                    mcpInitialized = true
+                    clientCapabilities = params["capabilities"]?.jsonObject ?: buildJsonObject {}
+
+                    val result = buildJsonObject {
+                        put("protocolVersion", "2024-11-05")
+                        put("capabilities", buildJsonObject {
+                            put("tools", buildJsonObject {
+                                put("listChanged", true)
+                            })
+                        })
+                        put("serverInfo", buildJsonObject {
+                            put("name", "VAYU Agentic Browser")
+                            put("version", "1.0.0")
+                        })
+                    }
+
+                    buildJsonRpcResponse(id, result)
+                }
+
+                "notifications/initialized" -> {
+                    // Client confirmed initialization — no response needed for notifications
+                    """{"jsonrpc":"2.0","result":null,"id":null}"""
+                }
+
+                "tools/list" -> {
+                    val toolDefs = ToolRegistry.tools.map { toolDef ->
+                        buildJsonObject {
+                            put("name", toolDef.name)
+                            put("description", toolDef.description)
+                            put("inputSchema", buildJsonObject {
+                                put("type", "object")
+                                put("properties", buildJsonObject {
+                                    toolDef.parameters.forEach { (paramName, param) ->
+                                        put(paramName, buildJsonObject {
+                                            put("type", param.type)
+                                            put("description", param.description)
+                                        })
+                                    }
+                                })
+                                val requiredParams = toolDef.parameters
+                                    .filter { it.value.required }
+                                    .keys
+                                    .map { JsonPrimitive(it) }
+                                if (requiredParams.isNotEmpty()) {
+                                    put("required", JsonArray(requiredParams))
+                                }
+                            })
+                        }
+                    }
+
+                    val result = buildJsonObject {
+                        put("tools", JsonArray(toolDefs))
+                    }
+
+                    buildJsonRpcResponse(id, result)
+                }
+
+                "tools/call" -> {
+                    val toolName = params["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val toolArgs = params["arguments"]?.jsonObject ?: buildJsonObject {}
+
+                    if (toolName.isBlank()) {
+                        buildJsonRpcError(id, -32602, "Missing tool name")
+                    } else {
+                        try {
+                            val toolCallId = UUID.randomUUID().toString()
+                            val toolResponse = handleToolCall(toolCallId, toolName, toolArgs)
+                            val responseJson = json.parseToJsonElement(toolResponse).jsonObject
+
+                            // Extract the actual result from our custom format
+                            val resultContent = when {
+                                responseJson.containsKey("result") -> responseJson["result"]!!.jsonPrimitive.content
+                                responseJson.containsKey("error") -> {
+                                    val errDetail = responseJson["error"]
+                                    if (errDetail is JsonObject) {
+                                        errDetail["message"]?.jsonPrimitive?.contentOrNull ?: errDetail.toString()
+                                    } else errDetail.toString()
+                                }
+                                else -> toolResponse
+                            }
+
+                            val result = buildJsonObject {
+                                put("content", JsonArray(listOf(
+                                    buildJsonObject {
+                                        put("type", "text")
+                                        put("text", resultContent)
+                                    }
+                                )))
+                            }
+
+                            buildJsonRpcResponse(id, result)
+                        } catch (e: Exception) {
+                            Logger.e("MCP JSON-RPC: Tool call error for $toolName", e)
+                            buildJsonRpcError(id, -32603, "Tool execution error: ${e.message}")
+                        }
+                    }
+                }
+
+                "ping" -> {
+                    buildJsonRpcResponse(id, buildJsonObject {})
+                }
+
+                else -> {
+                    buildJsonRpcError(id, -32601, "Method not found: $method")
+                }
+            }
+        } catch (e: Exception) {
+            Logger.e("MCP JSON-RPC: Parse error", e)
+            buildJsonRpcError(JsonNull, -32700, "Parse error: ${e.message}")
+        }
+    }
+
+    private fun buildJsonRpcResponse(id: JsonElement?, result: JsonObject): String {
+        val response = buildJsonObject {
+            put("jsonrpc", "2.0")
+            if (id != null && id != JsonNull) put("id", id)
+            put("result", result)
+        }
+        return json.encodeToString(response)
+    }
+
+    private fun buildJsonRpcError(id: JsonElement?, code: Int, message: String): String {
+        val response = buildJsonObject {
+            put("jsonrpc", "2.0")
+            if (id != null && id != JsonNull) put("id", id)
+            put("error", buildJsonObject {
+                put("code", code)
+                put("message", message)
+            })
+        }
+        return json.encodeToString(response)
     }
 
     private suspend fun handleMessage(rawMessage: String): String {
@@ -819,6 +1063,79 @@ class McpServer(
                         )
                         val saved = engine.saveWorkflow(workflow)
                         """{"success":true,"id":"${saved.id}","name":"${saved.name.replace("\"", "\\\"")}"}"""
+                    }
+                }
+
+                // ===== Phase 6: SSH Tunnel Tools =====
+                "ssh_tunnel_start" -> {
+                    val host = args["host"]?.jsonPrimitive?.content ?: ""
+                    val port = args["port"]?.jsonPrimitive?.intOrNull ?: 22
+                    val username = args["username"]?.jsonPrimitive?.content ?: ""
+                    val authType = args["authType"]?.jsonPrimitive?.contentOrNull ?: "password"
+                    val password = args["password"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val privateKey = args["privateKey"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val remotePort = args["remotePort"]?.jsonPrimitive?.intOrNull ?: 8765
+                    val localPort = args["localPort"]?.jsonPrimitive?.intOrNull ?: 8765
+
+                    if (host.isBlank() || username.isBlank()) {
+                        """{"error":"Host and username are required"}"""
+                    } else {
+                        // Save config for future use
+                        sshTunnelManager.updateConfig(com.vayu.agenticbrowser.tunnel.SshTunnelConfig(
+                            host = host, port = port, username = username,
+                            authType = authType, password = password, privateKey = privateKey,
+                            remotePort = remotePort, localPort = localPort
+                        ))
+                        sshTunnelManager.startTunnel(
+                            host = host, port = port, username = username,
+                            authType = authType, password = password, privateKey = privateKey,
+                            remotePort = remotePort, localPort = localPort
+                        )
+                    }
+                }
+
+                "ssh_tunnel_stop" -> {
+                    sshTunnelManager.stopTunnel()
+                    """{"success":true,"stopped":true}"""
+                }
+
+                "ssh_tunnel_status" -> {
+                    val running = sshTunnelManager.isRunning.value
+                    val url = sshTunnelManager.tunnelUrl.value
+                    val error = sshTunnelManager.lastError.value
+                    val config = sshTunnelManager.config.value
+                    val sseUrl = sshTunnelManager.getMcpEndpointUrl("sse")
+                    val wsUrl = sshTunnelManager.getMcpEndpointUrl("ws")
+                    """{"running":$running,"tunnelUrl":${if (url != null) "\"$url\"" else "null"},"sseEndpoint":${if (sseUrl != null) "\"$sseUrl\"" else "null"},"wsEndpoint":${if (wsUrl != null) "\"$wsUrl\"" else "null"},"lastError":${if (error != null) "\"${error.replace("\"", "\\\"")}\"" else "null"},"config":{"host":"${config.host}","port":${config.port},"username":"${config.username}","authType":"${config.authType}","remotePort":${config.remotePort},"localPort":${config.localPort}}}"""
+                }
+
+                "ssh_tunnel_config" -> {
+                    val config = sshTunnelManager.config.value
+                    // Check for config updates
+                    val newHost = args["host"]?.jsonPrimitive?.contentOrNull
+                    val newPort = args["port"]?.jsonPrimitive?.intOrNull
+                    val newUsername = args["username"]?.jsonPrimitive?.contentOrNull
+                    val newAuthType = args["authType"]?.jsonPrimitive?.contentOrNull
+                    val newPassword = args["password"]?.jsonPrimitive?.contentOrNull
+                    val newPrivateKey = args["privateKey"]?.jsonPrimitive?.contentOrNull
+                    val newRemotePort = args["remotePort"]?.jsonPrimitive?.intOrNull
+                    val newLocalPort = args["localPort"]?.jsonPrimitive?.intOrNull
+
+                    if (newHost != null || newUsername != null || newPassword != null || newPrivateKey != null) {
+                        val updatedConfig = config.copy(
+                            host = newHost ?: config.host,
+                            port = newPort ?: config.port,
+                            username = newUsername ?: config.username,
+                            authType = newAuthType ?: config.authType,
+                            password = newPassword ?: config.password,
+                            privateKey = newPrivateKey ?: config.privateKey,
+                            remotePort = newRemotePort ?: config.remotePort,
+                            localPort = newLocalPort ?: config.localPort
+                        )
+                        sshTunnelManager.updateConfig(updatedConfig)
+                        """{"success":true,"host":"${updatedConfig.host}","port":${updatedConfig.port},"username":"${updatedConfig.username}","authType":"${updatedConfig.authType}","remotePort":${updatedConfig.remotePort},"localPort":${updatedConfig.localPort}}"""
+                    } else {
+                        """{"host":"${config.host}","port":${config.port},"username":"${config.username}","authType":"${config.authType}","remotePort":${config.remotePort},"localPort":${config.localPort},"hasPassword":${config.password.isNotBlank()},"hasPrivateKey":${config.privateKey.isNotBlank()}}"""
                     }
                 }
 

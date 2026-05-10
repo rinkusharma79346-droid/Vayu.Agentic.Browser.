@@ -38,6 +38,8 @@ import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.engine.StealthController
 import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tunnel.TunnelManager
+import com.vayu.agenticbrowser.tunnel.SshTunnelManager
+import com.vayu.agenticbrowser.tunnel.SshTunnelConfig
 import kotlinx.coroutines.launch
 import java.net.NetworkInterface
 
@@ -56,6 +58,7 @@ fun SettingsScreen(
     val pluginRegistry = remember { PluginRegistry.getInstance() }
     val sessionRecorder = remember { SessionRecorder.getInstance() }
     val networkMonitor = remember { NetworkMonitor.getInstance() }
+    val sshTunnelManager = remember { SshTunnelManager.getInstance() }
 
     val tunnelUrl by tunnelManager.tunnelUrl.collectAsState()
     val tunnelRunning by tunnelManager.isRunning.collectAsState()
@@ -79,6 +82,22 @@ fun SettingsScreen(
     var downloadsExpanded by remember { mutableStateOf(false) }
     var recordingsExpanded by remember { mutableStateOf(false) }
     var brainExpanded by remember { mutableStateOf(false) }
+
+    // SSH tunnel state
+    var sshExpanded by remember { mutableStateOf(false) }
+    val sshRunning by sshTunnelManager.isRunning.collectAsState()
+    val sshTunnelUrl by sshTunnelManager.tunnelUrl.collectAsState()
+    val sshLastError by sshTunnelManager.lastError.collectAsState()
+    val sshConfig by sshTunnelManager.config.collectAsState()
+    var sshHost by remember { mutableStateOf(sshConfig.host) }
+    var sshPort by remember { mutableStateOf(sshConfig.port.toString()) }
+    var sshUsername by remember { mutableStateOf(sshConfig.username) }
+    var sshAuthType by remember { mutableStateOf(sshConfig.authType) }
+    var sshPassword by remember { mutableStateOf(sshConfig.password) }
+    var sshPrivateKey by remember { mutableStateOf(sshConfig.privateKey) }
+    var sshRemotePort by remember { mutableStateOf(sshConfig.remotePort.toString()) }
+    var sshLocalPort by remember { mutableStateOf(sshConfig.localPort.toString()) }
+    var showSshPassword by remember { mutableStateOf(false) }
 
     // Brain config state
     val currentBrainConfig = agentLoop?.getConfig() ?: BrainConfig()
@@ -248,6 +267,285 @@ fun SettingsScreen(
                         Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Copy WS URL")
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // ===== SSH Tunnel Section (Claude / AI Connectivity) =====
+            SectionHeader(
+                title = "SSH Tunnel (AI Connect)",
+                icon = Icons.Default.VpnLock,
+                expanded = sshExpanded,
+                onToggle = { sshExpanded = !sshExpanded }
+            )
+
+            AnimatedVisibility(visible = sshExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Status indicator
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(10.dp),
+                            shape = MaterialTheme.shapes.small,
+                            color = if (sshRunning) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outline
+                        ) {}
+                        Text(
+                            text = if (sshRunning) "SSH: Connected" else "SSH: Disconnected",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    // Error display
+                    if (sshLastError != null) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = sshLastError!!.take(200),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
+                    // SSH Host
+                    OutlinedTextField(
+                        value = sshHost,
+                        onValueChange = { sshHost = it },
+                        label = { Text("SSH Server Host") },
+                        placeholder = { Text("e.g., your-server.com") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !sshRunning
+                    )
+
+                    // SSH Port
+                    OutlinedTextField(
+                        value = sshPort,
+                        onValueChange = { sshPort = it },
+                        label = { Text("SSH Port") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !sshRunning
+                    )
+
+                    // Username
+                    OutlinedTextField(
+                        value = sshUsername,
+                        onValueChange = { sshUsername = it },
+                        label = { Text("Username") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !sshRunning
+                    )
+
+                    // Auth type selector
+                    Text("Authentication", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = sshAuthType == "password",
+                            onClick = { sshAuthType = "password" },
+                            label = { Text("Password") },
+                            enabled = !sshRunning
+                        )
+                        FilterChip(
+                            selected = sshAuthType == "key",
+                            onClick = { sshAuthType = "key" },
+                            label = { Text("Private Key") },
+                            enabled = !sshRunning
+                        )
+                    }
+
+                    // Password or Key field
+                    if (sshAuthType == "password") {
+                        OutlinedTextField(
+                            value = sshPassword,
+                            onValueChange = { sshPassword = it },
+                            label = { Text("Password") },
+                            visualTransformation = if (showSshPassword) VisualTransformation.None
+                                                    else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showSshPassword = !showSshPassword }) {
+                                    Icon(
+                                        if (showSshPassword) Icons.Default.VisibilityOff
+                                        else Icons.Default.Visibility,
+                                        contentDescription = "Toggle"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !sshRunning
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = sshPrivateKey,
+                            onValueChange = { sshPrivateKey = it },
+                            label = { Text("Private Key (PEM)") },
+                            placeholder = { Text("-----BEGIN RSA PRIVATE KEY-----...") },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                            maxLines = 8,
+                            enabled = !sshRunning
+                        )
+                    }
+
+                    // Remote Port (port on SSH server that AI connects to)
+                    OutlinedTextField(
+                        value = sshRemotePort,
+                        onValueChange = { sshRemotePort = it },
+                        label = { Text("Remote Port (AI connects here)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !sshRunning
+                    )
+
+                    // Local Port (MCP server port on phone)
+                    OutlinedTextField(
+                        value = sshLocalPort,
+                        onValueChange = { sshLocalPort = it },
+                        label = { Text("Local Port (MCP server)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !sshRunning
+                    )
+
+                    // Start/Stop button
+                    if (sshRunning) {
+                        Button(
+                            onClick = { sshTunnelManager.stopTunnel() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Stop SSH Tunnel")
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    sshTunnelManager.updateConfig(SshTunnelConfig(
+                                        host = sshHost,
+                                        port = sshPort.toIntOrNull() ?: 22,
+                                        username = sshUsername,
+                                        authType = sshAuthType,
+                                        password = sshPassword,
+                                        privateKey = sshPrivateKey,
+                                        remotePort = sshRemotePort.toIntOrNull() ?: 8765,
+                                        localPort = sshLocalPort.toIntOrNull() ?: 8765
+                                    ))
+                                    sshTunnelManager.startTunnel()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = sshHost.isNotBlank() && sshUsername.isNotBlank()
+                        ) {
+                            Icon(Icons.Default.VpnLock, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start SSH Tunnel")
+                        }
+                    }
+
+                    // Show tunnel URL and Claude config when connected
+                    if (sshRunning && sshTunnelUrl != null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "Tunnel Active",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val url = "http://$sshTunnelUrl/sse"
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("SSE URL", url))
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Text(
+                                        text = "SSE: http://$sshTunnelUrl/sse",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(12.dp))
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val url = "ws://$sshTunnelUrl/mcp"
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("WS URL", url))
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Text(
+                                        text = "WS: ws://$sshTunnelUrl/mcp",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(12.dp))
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = "Claude Desktop Config:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = """{
+  "mcpServers": {
+    "vayu-browser": {
+      "url": "http://$sshTunnelUrl/sse"
+    }
+  }
+}""",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        modifier = Modifier.padding(8.dp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
