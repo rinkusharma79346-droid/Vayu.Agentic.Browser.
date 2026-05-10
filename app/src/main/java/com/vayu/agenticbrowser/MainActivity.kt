@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
         // Start MCP server on app launch
         activityScope.launch(Dispatchers.IO) {
             try {
-                mcpServer.start()
+                mcpServer.startWithFallback()
                 Logger.i("MCP Server started successfully")
             } catch (e: Exception) {
                 Logger.e("Failed to start MCP Server", e)
@@ -101,7 +101,8 @@ class MainActivity : ComponentActivity() {
                                 agentConnected = mcpServer.isRunning,
                                 onNavigateToSettings = { navController.navigate("settings") },
                                 onNavigateToBrain = { navController.navigate("brain") },
-                                agentLoop = agentLoop
+                                agentLoop = agentLoop,
+                                mcpStatus = mcpServer.mcpStatus
                             )
                         }
                         composable("settings") {

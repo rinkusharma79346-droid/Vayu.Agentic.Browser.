@@ -62,7 +62,7 @@ class McpForegroundService : Service() {
         serviceScope.launch {
             try {
                 if (!mcpServer.isRunning.value) {
-                    mcpServer.start()
+                    mcpServer.startWithFallback()
                     Logger.i("MCP Server started from foreground service")
                 }
             } catch (e: Exception) {
@@ -111,7 +111,7 @@ class McpForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("VAYU Agent Active")
-            .setContentText("MCP Server running on port 8765")
+            .setContentText("MCP Server running — Render SSE + Local :8765")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

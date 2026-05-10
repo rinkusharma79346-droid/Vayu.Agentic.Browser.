@@ -15,13 +15,15 @@ android {
         applicationId = "com.vayu.agenticbrowser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "MCP_RENDER_URL", "\"https://j-a-r-v-i-s-ktlh.onrender.com/sse\"")
     }
 
     buildTypes {
@@ -45,6 +47,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

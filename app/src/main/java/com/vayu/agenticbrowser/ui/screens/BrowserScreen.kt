@@ -21,12 +21,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.vayu.agenticbrowser.agent.McpStatus
 import com.vayu.agenticbrowser.agent.SessionRecorder
 import com.vayu.agenticbrowser.downloads.DownloadStatus
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
@@ -38,6 +40,7 @@ import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.brain.AgentLoop
 import com.vayu.agenticbrowser.brain.AgentState
 import com.vayu.agenticbrowser.ui.components.AgentDashboard
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,11 +49,13 @@ fun BrowserScreen(
     agentConnected: StateFlow<Boolean>,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToBrain: () -> Unit = {},
-    agentLoop: AgentLoop? = null
+    agentLoop: AgentLoop? = null,
+    mcpStatus: StateFlow<McpStatus> = MutableStateFlow(McpStatus.OFFLINE)
 ) {
     val context = LocalContext.current
     var urlText by remember { mutableStateOf("https://www.google.com") }
     val isConnected by agentConnected.collectAsState()
+    val currentMcpStatus by mcpStatus.collectAsState()
 
     val webViewManager = remember { WebViewManager.getInstance() }
     val tabManager = remember { TabManager.getInstance() }
@@ -237,7 +242,8 @@ fun BrowserScreen(
                 stealthEnabled = stealthEnabled,
                 agentState = agentState,
                 currentGoal = currentGoal,
-                agentStepCount = agentStepCount
+                agentStepCount = agentStepCount,
+                mcpStatus = currentMcpStatus
             )
         }
 
@@ -260,11 +266,18 @@ fun BrowserScreen(
                     Surface(
                         modifier = Modifier.size(10.dp),
                         shape = MaterialTheme.shapes.small,
-                        color = if (isConnected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.error
+                        color = when (currentMcpStatus) {
+                            McpStatus.CONNECTED -> Color(0xFF00E5FF)
+                            McpStatus.RETRYING -> Color(0xFFFFB300)
+                            McpStatus.OFFLINE -> Color(0xFFFF3D57)
+                        }
                     ) {}
                     Text(
-                        text = if (isConnected) "Agent: Connected" else "Agent: Disconnected",
+                        text = when (currentMcpStatus) {
+                            McpStatus.CONNECTED -> "Agent: Connected"
+                            McpStatus.RETRYING -> "Agent: Connecting"
+                            McpStatus.OFFLINE -> "Agent: Offline"
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
 

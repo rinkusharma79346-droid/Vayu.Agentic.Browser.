@@ -43,6 +43,7 @@ import kotlinx.serialization.json.*
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class McpServer(
     private val domController: DomController,
@@ -87,13 +88,20 @@ class McpServer(
     private val _connectedSince = MutableStateFlow(0L)
     val connectedSince: StateFlow<Long> = _connectedSince.asStateFlow()
 
-    private val pairingCode = "vayu1234"
+    private val pairingCode = McpConfig.PAIRING_CODE
 
     /** Server port — exposed for UI display */
-    val port: Int = 8765
+    val port: Int = McpConfig.LOCAL_PORT
 
     /** Server name — exposed for UI display */
-    val serverName: String = "VAYU MCP Server"
+    val serverName: String = McpConfig.SERVER_NAME
+    
+    /** Render SSE URL for Claude AI (remote) */
+    val renderSseUrl: String = McpConfig.RENDER_SSE_URL
+
+    /** MCP connection status for UI */
+    private val _mcpStatus = MutableStateFlow(McpStatus.OFFLINE)
+    val mcpStatus: StateFlow<McpStatus> = _mcpStatus.asStateFlow()
 
     /** SSE clients for streaming responses — each client has a channel to receive SSE data */
     private val sseClients = ConcurrentHashMap<String, Channel<String>>()
@@ -128,6 +136,9 @@ class McpServer(
     /** HTTP message endpoint for Claude AI (MCP standard) */
     fun getMessageUrl(): String = "http://${getLocalIpAddress()}:$port/message"
 
+    /** Render SSE URL for Claude AI (remote) */
+    fun getRenderSseUrl(): String = McpConfig.RENDER_SSE_URL
+
     /**
      * Direct tool execution for the AgentLoop brain.
      * Bypasses WebSocket, executes the tool and returns the result string.
@@ -154,169 +165,235 @@ class McpServer(
     fun start() {
         if (server != null) {
             Logger.w("MCP Server already running")
+            _isRunning.value = true
+            _mcpStatus.value = McpStatus.CONNECTED
             return
         }
 
-        Logger.i("Starting MCP Server on port $port (WebSocket + SSE)")
+        try {
+            Logger.i("Starting MCP Server on port $port (WebSocket + SSE)")
 
-        server = embeddedServer(CIO, port = port) {
-            install(WebSockets)
+            server = embeddedServer(CIO, port = port) {
+                install(WebSockets)
 
-            routing {
-                // ===== WebSocket endpoint (existing) =====
-                webSocket("/mcp") {
-                    Logger.i("New MCP WebSocket client connection")
-                    val sessionId = UUID.randomUUID().toString()
+                routing {
+                    // ===== WebSocket endpoint (existing) =====
+                    webSocket("/mcp") {
+                        Logger.i("New MCP WebSocket client connection")
+                        val sessionId = UUID.randomUUID().toString()
 
-                    try {
-                        // Step 1: Auth challenge
-                        val nonce = UUID.randomUUID().toString()
-                        val challengeMsg = json.encodeToString(
-                            AuthChallenge(type = "auth_challenge", nonce = nonce)
-                        )
-                        send(Frame.Text(challengeMsg))
-                        Logger.d("Sent auth_challenge with nonce: $nonce")
-
-                        // Step 2: Read auth response
-                        val authFrame = incoming.receive()
-                        val authText = (authFrame as? Frame.Text)?.readText() ?: run {
-                            Logger.w("Invalid auth frame received")
-                            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid frame"))
-                            return@webSocket
-                        }
-
-                        Logger.d("Received auth response: $authText")
-
-                        val authPayload = json.parseToJsonElement(authText).jsonObject
-                        val clientHash = authPayload["hash"]?.jsonPrimitive?.content ?: ""
-
-                        // Verify SHA-256(pairingCode + nonce)
-                        val expectedHash = sha256Hex(pairingCode + nonce)
-                        if (clientHash != expectedHash) {
-                            Logger.w("Auth failed: hash mismatch")
-                            val failMsg = json.encodeToString(
-                                AuthResult(type = "auth_failure", error = "Invalid pairing code")
+                        try {
+                            // Step 1: Auth challenge
+                            val nonce = UUID.randomUUID().toString()
+                            val challengeMsg = json.encodeToString(
+                                AuthChallenge(type = "auth_challenge", nonce = nonce)
                             )
-                            send(Frame.Text(failMsg))
-                            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Auth failed"))
-                            return@webSocket
-                        }
+                            send(Frame.Text(challengeMsg))
+                            Logger.d("Sent auth_challenge with nonce: $nonce")
 
-                        // Step 3: Auth success
-                        _connectedSince.value = System.currentTimeMillis()
-                        Logger.i("Auth successful for session: $sessionId")
-                        val successMsg = json.encodeToString(
-                            AuthSuccess(type = "auth_success", sessionId = sessionId)
-                        )
-                        send(Frame.Text(successMsg))
-
-                        // Step 4: Main message loop
-                        for (frame in incoming) {
-                            val text = (frame as? Frame.Text)?.readText() ?: continue
-                            Logger.d("Received message: $text")
-                            val response = handleMessage(text)
-                            send(Frame.Text(response))
-                        }
-
-                    } catch (e: Exception) {
-                        Logger.e("MCP WebSocket error", e)
-                    } finally {
-                        Logger.i("MCP client disconnected: $sessionId")
-                    }
-                }
-
-                // ===== SSE endpoint for Claude AI (manual SSE implementation) =====
-                get("/sse") {
-                    Logger.i("New MCP SSE client connection")
-                    val clientId = UUID.randomUUID().toString()
-
-                    // Create a channel for this client to receive messages
-                    val channel = Channel<String>(Channel.BUFFERED)
-                    sseClients[clientId] = channel
-
-                    _connectedSince.value = System.currentTimeMillis()
-
-                    call.respondOutputStream(contentType = ContentType.Text.EventStream) {
-                        val writer = java.io.OutputStreamWriter(this)
-                        try {
-                            // Send endpoint event (MCP protocol: client should POST to /message)
-                            writer.write("event: endpoint\n")
-                            writer.write("data: /message?clientId=$clientId\n\n")
-                            writer.flush()
-
-                            // Send messages from channel as SSE events
-                            for (data in channel) {
-                                writer.write("event: message\n")
-                                writer.write("data: $data\n\n")
-                                writer.flush()
+                            // Step 2: Read auth response
+                            val authFrame = incoming.receive()
+                            val authText = (authFrame as? Frame.Text)?.readText() ?: run {
+                                Logger.w("Invalid auth frame received")
+                                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid frame"))
+                                return@webSocket
                             }
-                        } catch (_: java.io.IOException) {
-                            // Client disconnected
-                        } finally {
-                            sseClients.remove(clientId)
-                            writer.close()
-                            Logger.i("MCP SSE client disconnected: $clientId")
-                        }
-                    }
-                }
 
-                // ===== HTTP POST message endpoint for Claude AI (SSE transport) =====
-                post("/message") {
-                    val clientId = call.parameters["clientId"] ?: run {
-                        call.respondText(
-                            """{"error":"clientId parameter required"}""",
-                            ContentType.Application.Json,
-                            HttpStatusCode.BadRequest
-                        )
-                        return@post
-                    }
+                            Logger.d("Received auth response: $authText")
 
-                    val rawBody = call.receiveText()
-                    Logger.d("SSE message from client $clientId: $rawBody")
+                            val authPayload = json.parseToJsonElement(authText).jsonObject
+                            val clientHash = authPayload["hash"]?.jsonPrimitive?.content ?: ""
 
-                    // Process the MCP message
-                    val response = handleMessage(rawBody)
+                            // Verify SHA-256(pairingCode + nonce)
+                            val expectedHash = sha256Hex(pairingCode + nonce)
+                            if (clientHash != expectedHash) {
+                                Logger.w("Auth failed: hash mismatch")
+                                val failMsg = json.encodeToString(
+                                    AuthResult(type = "auth_failure", error = "Invalid pairing code")
+                                )
+                                send(Frame.Text(failMsg))
+                                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Auth failed"))
+                                return@webSocket
+                            }
 
-                    // Push the response via SSE channel to the client
-                    val sseChannel = sseClients[clientId]
-                    if (sseChannel != null) {
-                        try {
-                            sseChannel.send(response)
+                            // Step 3: Auth success
+                            _connectedSince.value = System.currentTimeMillis()
+                            Logger.i("Auth successful for session: $sessionId")
+                            val successMsg = json.encodeToString(
+                                AuthSuccess(type = "auth_success", sessionId = sessionId)
+                            )
+                            send(Frame.Text(successMsg))
+
+                            // Step 4: Main message loop
+                            for (frame in incoming) {
+                                val text = (frame as? Frame.Text)?.readText() ?: continue
+                                Logger.d("Received message: $text")
+                                val response = handleMessage(text)
+                                send(Frame.Text(response))
+                            }
+
                         } catch (e: Exception) {
-                            Logger.e("Failed to send SSE response to client $clientId", e)
+                            Logger.e("MCP WebSocket error", e)
+                        } finally {
+                            Logger.i("MCP client disconnected: $sessionId")
                         }
-                        call.respondText("""{"status":"sent"}""", ContentType.Application.Json)
-                    } else {
-                        // If no SSE channel, return the response directly via HTTP
-                        call.respondText(response, ContentType.Application.Json)
                     }
-                }
 
-                // ===== Server info endpoint (useful for discovery) =====
-                get("/info") {
-                    val tunnelUrl = tunnelManager.tunnelUrl.value
-                    val info = buildJsonObject {
-                        put("name", serverName)
-                        put("version", "1.0.0")
-                        put("port", port)
-                        put("wsUrl", getWsUrl())
-                        put("sseUrl", getSseUrl())
-                        put("messageUrl", getMessageUrl())
-                        put("pairingCodeRequired", true)
-                        put("toolCount", ToolRegistry.toJson().let {
-                            json.parseToJsonElement(it).jsonArray.size
-                        })
-                        if (tunnelUrl != null) {
-                            put("tunnelUrl", tunnelUrl)
+                    // ===== SSE endpoint for Claude AI (manual SSE implementation) =====
+                    get("/sse") {
+                        Logger.i("New MCP SSE client connection")
+                        val clientId = UUID.randomUUID().toString()
+
+                        // Create a channel for this client to receive messages
+                        val channel = Channel<String>(Channel.BUFFERED)
+                        sseClients[clientId] = channel
+
+                        _connectedSince.value = System.currentTimeMillis()
+
+                        call.respondOutputStream(contentType = ContentType.Text.EventStream) {
+                            val writer = java.io.OutputStreamWriter(this)
+                            try {
+                                // Send endpoint event (MCP protocol: client should POST to /message)
+                                writer.write("event: endpoint\n")
+                                writer.write("data: /message?clientId=$clientId\n\n")
+                                writer.flush()
+
+                                // Send messages from channel as SSE events
+                                for (data in channel) {
+                                    writer.write("event: message\n")
+                                    writer.write("data: $data\n\n")
+                                    writer.flush()
+                                }
+                            } catch (_: java.io.IOException) {
+                                // Client disconnected
+                            } finally {
+                                sseClients.remove(clientId)
+                                writer.close()
+                                Logger.i("MCP SSE client disconnected: $clientId")
+                            }
                         }
                     }
-                    call.respondText(json.encodeToString(info), ContentType.Application.Json)
+
+                    // ===== HTTP POST message endpoint for Claude AI (SSE transport) =====
+                    post("/message") {
+                        val clientId = call.parameters["clientId"] ?: run {
+                            call.respondText(
+                                """{"error":"clientId parameter required"}""",
+                                ContentType.Application.Json,
+                                HttpStatusCode.BadRequest
+                            )
+                            return@post
+                        }
+
+                        val rawBody = call.receiveText()
+                        Logger.d("SSE message from client $clientId: $rawBody")
+
+                        // Process the MCP message
+                        val response = handleMessage(rawBody)
+
+                        // Push the response via SSE channel to the client
+                        val sseChannel = sseClients[clientId]
+                        if (sseChannel != null) {
+                            try {
+                                sseChannel.send(response)
+                            } catch (e: Exception) {
+                                Logger.e("Failed to send SSE response to client $clientId", e)
+                            }
+                            call.respondText("""{"status":"sent"}""", ContentType.Application.Json)
+                        } else {
+                            // If no SSE channel, return the response directly via HTTP
+                            call.respondText(response, ContentType.Application.Json)
+                        }
+                    }
+
+                    // ===== Server info endpoint (useful for discovery) =====
+                    get("/info") {
+                        val tunnelUrl = tunnelManager.tunnelUrl.value
+                        val info = buildJsonObject {
+                            put("name", serverName)
+                            put("version", McpConfig.APP_VERSION)
+                            put("port", port)
+                            put("wsUrl", getWsUrl())
+                            put("sseUrl", getSseUrl())
+                            put("messageUrl", getMessageUrl())
+                            put("renderSseUrl", McpConfig.RENDER_SSE_URL)
+                            put("pairingCodeRequired", true)
+                            put("toolCount", ToolRegistry.toJson().let {
+                                json.parseToJsonElement(it).jsonArray.size
+                            })
+                            if (tunnelUrl != null) {
+                                put("tunnelUrl", tunnelUrl)
+                            }
+                        }
+                        call.respondText(json.encodeToString(info), ContentType.Application.Json)
+                    }
                 }
+            }.start(wait = false)
+
+            _isRunning.value = true
+            _mcpStatus.value = McpStatus.CONNECTED
+            Logger.i("MCP Server started on port $port — WS: /mcp, SSE: /sse, HTTP: /message, Info: /info")
+        } catch (e: Exception) {
+            Logger.e("Failed to start MCP Server on port $port", e)
+            _isRunning.value = false
+            _mcpStatus.value = McpStatus.OFFLINE
+            server = null
+        }
+    }
+
+    /**
+     * Start with fallback: try Render SSE connection first, then fall back to local WS.
+     * This is what the UI toggle calls.
+     */
+    suspend fun startWithFallback() {
+        _mcpStatus.value = McpStatus.RETRYING
+        Logger.i("VAYU_MCP: Attempting Render SSE connection to ${McpConfig.RENDER_SSE_URL}")
+        
+        // Try Render SSE first
+        val renderAvailable = checkRenderSse()
+        if (renderAvailable) {
+            Logger.i("VAYU_MCP: Render SSE is available at ${McpConfig.RENDER_SSE_URL}")
+        } else {
+            Logger.w("VAYU_MCP: Render SSE not available, will use local server only")
+        }
+        
+        // Always start the local server too (it's needed for local MCP clients)
+        start()
+        
+        if (_isRunning.value) {
+            _mcpStatus.value = McpStatus.CONNECTED
+            Logger.i("VAYU_MCP: MCP server ready. Render: $renderAvailable, Local: true")
+        } else {
+            _mcpStatus.value = McpStatus.OFFLINE
+            Logger.e("VAYU_MCP: Failed to start any MCP server")
+        }
+    }
+    
+    /**
+     * Check if the Render SSE endpoint is reachable.
+     */
+    private suspend fun checkRenderSse(): Boolean {
+        return try {
+            kotlinx.coroutines.withTimeout(McpConfig.CONNECTION_TIMEOUT_MS) {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(McpConfig.CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                    .readTimeout(10_000, TimeUnit.MILLISECONDS)
+                    .build()
+                val request = okhttp3.Request.Builder()
+                    .url(McpConfig.RENDER_SSE_URL)
+                    .header("Accept", "text/event-stream")
+                    .build()
+                val response = client.newCall(request).execute()
+                val available = response.isSuccessful || response.code == 200
+                val code = response.code
+                response.close()
+                Logger.i("VAYU_MCP: Render SSE check result: $available (HTTP $code)")
+                available
             }
-        }.start(wait = false)
-
-        _isRunning.value = true
-        Logger.i("MCP Server started on port $port — WS: /mcp, SSE: /sse, HTTP: /message, Info: /info")
+        } catch (e: Exception) {
+            Logger.w("VAYU_MCP: Render SSE check failed: ${e.message}")
+            false
+        }
     }
 
     fun stop() {
@@ -324,6 +401,7 @@ class McpServer(
         server?.stop(1000, 2000)
         server = null
         _isRunning.value = false
+        _mcpStatus.value = McpStatus.OFFLINE
         _connectedSince.value = 0L
         Logger.i("MCP Server stopped")
     }
@@ -812,7 +890,7 @@ class McpServer(
                     val pluginCount = pluginRegistry.activePlugins.value.size
                     val tabCount = tabManager.tabs.value.size
                     val brainState = agentLoop.state.value.name
-                    """{"appVersion":"1.0.0","tabCount":$tabCount,"connectedSince":${_connectedSince.value},"tunnelUrl":${if (tunnelUrl != null) "\"$tunnelUrl\"" else "null"},"pluginCount":$pluginCount,"platform":"android","networkConnected":${networkMonitor.isConnected.value},"brainState":"$brainState"}"""
+                    """{"appVersion":"${McpConfig.APP_VERSION}","tabCount":$tabCount,"connectedSince":${_connectedSince.value},"tunnelUrl":${if (tunnelUrl != null) "\"$tunnelUrl\"" else "null"},"pluginCount":$pluginCount,"platform":"android","networkConnected":${networkMonitor.isConnected.value},"brainState":"$brainState","renderSseUrl":"${McpConfig.RENDER_SSE_URL}"}"""
                 }
 
                 // ===== Phase 5: Brain / Autonomous Agent Tools =====

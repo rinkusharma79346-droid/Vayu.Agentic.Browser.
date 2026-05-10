@@ -18,6 +18,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vayu.agenticbrowser.agent.McpStatus
 import com.vayu.agenticbrowser.brain.AgentState
 import com.vayu.agenticbrowser.downloads.DownloadStatus
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
@@ -34,7 +35,8 @@ fun AgentDashboard(
     stealthEnabled: Boolean = false,
     agentState: AgentState = AgentState.IDLE,
     currentGoal: String? = null,
-    agentStepCount: Int = 0
+    agentStepCount: Int = 0,
+    mcpStatus: McpStatus = McpStatus.OFFLINE
 ) {
     val isConnected by agentConnected.collectAsState()
     val downloads by downloadManager.downloads.collectAsState()
@@ -73,8 +75,11 @@ fun AgentDashboard(
             Box(contentAlignment = Alignment.TopEnd) {
                 Surface(
                     shape = CircleShape,
-                    color = if (isConnected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
+                    color = when (mcpStatus) {
+                        McpStatus.CONNECTED -> Color(0xFF00E5FF)
+                        McpStatus.RETRYING -> Color(0xFFFFB300)
+                        McpStatus.OFFLINE -> Color(0xFFFF3D57)
+                    },
                     modifier = Modifier.size(24.dp),
                     onClick = { isMinimized = false }
                 ) {}
@@ -119,12 +124,19 @@ fun AgentDashboard(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isConnected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.error
+                                        when (mcpStatus) {
+                                            McpStatus.CONNECTED -> Color(0xFF00E5FF)  // cyan
+                                            McpStatus.RETRYING -> Color(0xFFFFB300)   // amber
+                                            McpStatus.OFFLINE -> Color(0xFFFF3D57)    // red
+                                        }
                                     )
                             )
                             Text(
-                                text = if (isConnected) "Connected" else "Offline",
+                                text = when (mcpStatus) {
+                                    McpStatus.CONNECTED -> "Connected"
+                                    McpStatus.RETRYING -> "Connecting"
+                                    McpStatus.OFFLINE -> "Offline"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 11.sp
                             )

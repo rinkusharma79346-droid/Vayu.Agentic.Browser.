@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -33,7 +34,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vayu.agenticbrowser.agent.McpConfig
 import com.vayu.agenticbrowser.agent.McpServer
+import com.vayu.agenticbrowser.agent.McpStatus
 import com.vayu.agenticbrowser.brain.*
 import com.vayu.agenticbrowser.common.Logger
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +68,7 @@ fun BrainScreen(
 
     // MCP server state
     val mcpRunning by mcpServer.isRunning.collectAsState()
+    val mcpStatus by mcpServer.mcpStatus.collectAsState()
     val connectedSince by mcpServer.connectedSince.collectAsState()
 
     var goalInput by remember { mutableStateOf("") }
@@ -182,7 +186,7 @@ fun BrainScreen(
                                 scope.launch(Dispatchers.IO) {
                                     if (enable) {
                                         try {
-                                            mcpServer.start()
+                                            mcpServer.startWithFallback()
                                         } catch (e: Exception) {
                                             Logger.e("Failed to start MCP server", e)
                                         }
@@ -195,6 +199,36 @@ fun BrainScreen(
                                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary
                             )
+                        )
+                    }
+
+                    // Connection status indicator
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(10.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = when (mcpStatus) {
+                                McpStatus.CONNECTED -> Color(0xFF00E5FF) // cyan
+                                McpStatus.RETRYING -> Color(0xFFFFB300) // amber
+                                McpStatus.OFFLINE -> Color(0xFFFF3D57)  // red
+                            }
+                        ) {}
+                        Text(
+                            text = when (mcpStatus) {
+                                McpStatus.CONNECTED -> "Connected"
+                                McpStatus.RETRYING -> "Connecting..."
+                                McpStatus.OFFLINE -> "Offline"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (mcpStatus) {
+                                McpStatus.CONNECTED -> Color(0xFF00E5FF)
+                                McpStatus.RETRYING -> Color(0xFFFFB300)
+                                McpStatus.OFFLINE -> Color(0xFFFF3D57)
+                            }
                         )
                     }
 
@@ -225,14 +259,23 @@ fun BrainScreen(
                             context = context
                         )
 
-                        // SSE URL (for Claude AI)
+                        // Render SSE URL (for Claude AI) - PRIMARY
+                        val renderUrl = mcpServer.getRenderSseUrl()
+                        CopyableDetailRow(
+                            icon = Icons.Default.Cloud,
+                            label = "Render SSE",
+                            value = renderUrl,
+                            context = context,
+                            highlight = true
+                        )
+
+                        // Local SSE URL
                         val sseUrl = mcpServer.getSseUrl()
                         CopyableDetailRow(
                             icon = Icons.Default.Stream,
-                            label = "SSE (Claude)",
+                            label = "Local SSE",
                             value = sseUrl,
-                            context = context,
-                            highlight = true
+                            context = context
                         )
 
                         // HTTP Message URL
@@ -293,7 +336,7 @@ fun BrainScreen(
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Text(
-                                    text = "To connect Claude AI: Open Claude Desktop Settings > Developer > Edit Config. Add SSE server URL shown above.",
+                                    text = "To connect Claude AI: Open Claude Desktop > Settings > Developer > Edit Config. Add the Render SSE URL above as an SSE server. The local SSE/WS URLs work on the same network.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
