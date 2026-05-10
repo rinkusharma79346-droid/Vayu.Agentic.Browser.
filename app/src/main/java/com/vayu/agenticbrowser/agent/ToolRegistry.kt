@@ -449,6 +449,29 @@ object ToolRegistry {
                 "goal" to ToolParam(type = "string", description = "The goal for the agent to accomplish when triggered", required = true),
                 "delayMinutes" to ToolParam(type = "integer", description = "Number of minutes from now to schedule the goal", required = true)
             )
+        ),
+
+        // ===== Phase 5: Workflow Tools =====
+        ToolDef(
+            name = "workflow_list",
+            description = "List all available workflows including built-in and user-created ones. Returns workflow ID, name, description, and whether it is built-in.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "workflow_run",
+            description = "Run a saved workflow by its ID. This starts the autonomous agent with the workflow's goal prompt. Returns the agent state and goal information.",
+            parameters = mapOf(
+                "id" to ToolParam(type = "string", description = "The ID of the workflow to run", required = true)
+            )
+        ),
+        ToolDef(
+            name = "workflow_save",
+            description = "Save a new workflow with a name, description, and goal prompt. The workflow can later be run or scheduled for automated execution.",
+            parameters = mapOf(
+                "name" to ToolParam(type = "string", description = "A descriptive name for the workflow", required = true),
+                "description" to ToolParam(type = "string", description = "A brief description of what the workflow does", required = true),
+                "goalPrompt" to ToolParam(type = "string", description = "The goal prompt that the autonomous agent will execute when this workflow is run", required = true)
+            )
         )
     )
 

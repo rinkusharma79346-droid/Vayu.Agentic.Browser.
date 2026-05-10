@@ -1,0 +1,9 @@
+{
+  "id": "builtin_social_media_post",
+  "name": "Auto Post to X/Twitter",
+  "description": "Navigate to x.com, log in using the saved vault profile, compose and post a tweet, then confirm the post was published.",
+  "goalPrompt": "Navigate to x.com, log in using the saved vault profile for x.com, compose and post a tweet about [CONTENT], confirm the post was published.",
+  "schedule": null,
+  "createdAt": 0,
+  "isBuiltIn": true
+}

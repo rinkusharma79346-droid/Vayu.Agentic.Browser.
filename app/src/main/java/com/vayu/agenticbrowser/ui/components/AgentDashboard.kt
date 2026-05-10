@@ -15,8 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vayu.agenticbrowser.brain.AgentState
 import com.vayu.agenticbrowser.downloads.DownloadStatus
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +31,10 @@ fun AgentDashboard(
     activeTabIndex: Int,
     downloadManager: VayuDownloadManager,
     isRecording: Boolean = false,
-    stealthEnabled: Boolean = false
+    stealthEnabled: Boolean = false,
+    agentState: AgentState = AgentState.IDLE,
+    currentGoal: String? = null,
+    agentStepCount: Int = 0
 ) {
     val isConnected by agentConnected.collectAsState()
     val downloads by downloadManager.downloads.collectAsState()
@@ -41,6 +46,16 @@ fun AgentDashboard(
     var isMinimized by remember { mutableStateOf(false) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
+
+    // Agent state color
+    val agentStateColor = when (agentState) {
+        AgentState.IDLE -> MaterialTheme.colorScheme.surfaceVariant
+        AgentState.THINKING -> MaterialTheme.colorScheme.tertiary
+        AgentState.EXECUTING -> MaterialTheme.colorScheme.primary
+        AgentState.WAITING -> MaterialTheme.colorScheme.secondary
+        AgentState.COMPLETED -> MaterialTheme.colorScheme.primary
+        AgentState.FAILED -> MaterialTheme.colorScheme.error
+    }
 
     Box(
         modifier = Modifier
@@ -54,7 +69,7 @@ fun AgentDashboard(
             }
     ) {
         if (isMinimized) {
-            // Minimized: connection dot with recording indicator
+            // Minimized: connection dot with agent state color ring
             Box(contentAlignment = Alignment.TopEnd) {
                 Surface(
                     shape = CircleShape,
@@ -63,7 +78,13 @@ fun AgentDashboard(
                     modifier = Modifier.size(24.dp),
                     onClick = { isMinimized = false }
                 ) {}
-                if (isRecording) {
+                if (agentState != AgentState.IDLE) {
+                    Surface(
+                        shape = CircleShape,
+                        color = agentStateColor,
+                        modifier = Modifier.size(10.dp)
+                    ) {}
+                } else if (isRecording) {
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.error,
@@ -77,7 +98,7 @@ fun AgentDashboard(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
                 tonalElevation = 4.dp,
-                modifier = Modifier.width(200.dp)
+                modifier = Modifier.width(220.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -122,6 +143,45 @@ fun AgentDashboard(
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
+                    // Agent state indicator
+                    if (agentState != AgentState.IDLE) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = CircleShape,
+                                color = agentStateColor
+                            ) {}
+                            Text(
+                                text = agentState.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = agentStateColor
+                            )
+                            Text(
+                                text = "($agentStepCount)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Current goal (truncated to 30 chars)
+                        if (currentGoal != null) {
+                            Text(
+                                text = currentGoal.take(30) + if (currentGoal.length > 30) "..." else "",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
                     // Last tool
                     Row(

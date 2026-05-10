@@ -26,6 +26,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vayu.agenticbrowser.agent.SessionRecorder
+import com.vayu.agenticbrowser.brain.AgentLoop
+import com.vayu.agenticbrowser.brain.BrainClient
+import com.vayu.agenticbrowser.brain.BrainConfig
+import com.vayu.agenticbrowser.brain.ChatMessage
+import com.vayu.agenticbrowser.brain.LlmProvider
 import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.engine.StealthController
 import com.vayu.agenticbrowser.plugins.PluginRegistry
@@ -38,7 +43,8 @@ import java.net.NetworkInterface
 fun SettingsScreen(
     onBack: () -> Unit,
     onNavigateToVault: () -> Unit,
-    onNavigateToBrain: () -> Unit = {}
+    onNavigateToBrain: () -> Unit = {},
+    agentLoop: AgentLoop? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -69,6 +75,20 @@ fun SettingsScreen(
     var stealthExpanded by remember { mutableStateOf(false) }
     var downloadsExpanded by remember { mutableStateOf(false) }
     var recordingsExpanded by remember { mutableStateOf(false) }
+    var brainExpanded by remember { mutableStateOf(false) }
+
+    // Brain config state
+    val currentBrainConfig = agentLoop?.getConfig() ?: BrainConfig()
+    var brainProvider by remember { mutableStateOf(currentBrainConfig.provider) }
+    var brainApiKey by remember { mutableStateOf(currentBrainConfig.apiKey) }
+    var brainBaseUrl by remember { mutableStateOf(currentBrainConfig.baseUrl) }
+    var brainModel by remember { mutableStateOf(currentBrainConfig.model) }
+    var brainMaxTokens by remember { mutableStateOf(currentBrainConfig.maxTokens.toString()) }
+    var brainSystemPrompt by remember { mutableStateOf(currentBrainConfig.systemPrompt) }
+    var brainShowApiKey by remember { mutableStateOf(false) }
+    var brainSystemPromptExpanded by remember { mutableStateOf(false) }
+    var testConnectionResult by remember { mutableStateOf<String?>(null) }
+    var testConnectionRunning by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -569,6 +589,218 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider()
+
+            // ===== Brain / AI Agent Section =====
+            SectionHeader(
+                title = "Brain / AI Agent",
+                icon = Icons.Default.Psychology,
+                expanded = brainExpanded,
+                onToggle = { brainExpanded = !brainExpanded }
+            )
+
+            AnimatedVisibility(visible = brainExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Provider selector
+                    Text("Provider", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        LlmProvider.entries.forEach { p ->
+                            FilterChip(
+                                selected = brainProvider == p,
+                                onClick = {
+                                    brainProvider = p
+                                    val defaults = BrainConfig.providerDefaults[p]
+                                    if (defaults != null) {
+                                        if (brainBaseUrl.isBlank()) brainBaseUrl = defaults.first
+                                        if (brainModel.isBlank()) brainModel = defaults.second
+                                    }
+                                },
+                                label = { Text(p.name, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    // API Key
+                    OutlinedTextField(
+                        value = brainApiKey,
+                        onValueChange = { brainApiKey = it },
+                        label = { Text("API Key") },
+                        visualTransformation = if (brainShowApiKey) VisualTransformation.None
+                                                else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { brainShowApiKey = !brainShowApiKey }) {
+                                Icon(
+                                    if (brainShowApiKey) Icons.Default.VisibilityOff
+                                    else Icons.Default.Visibility,
+                                    contentDescription = "Toggle"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // Base URL (shown for CUSTOM or when overridden)
+                    if (brainProvider == LlmProvider.CUSTOM || brainBaseUrl.isNotBlank()) {
+                        OutlinedTextField(
+                            value = brainBaseUrl,
+                            onValueChange = { brainBaseUrl = it },
+                            label = { Text("Base URL") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+
+                    // Model
+                    OutlinedTextField(
+                        value = brainModel,
+                        onValueChange = { brainModel = it },
+                        label = { Text("Model") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text(BrainConfig.providerDefaults[brainProvider]?.second ?: "") }
+                    )
+
+                    // Max Tokens
+                    OutlinedTextField(
+                        value = brainMaxTokens,
+                        onValueChange = { brainMaxTokens = it },
+                        label = { Text("Max Tokens") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // System Prompt Override (expandable)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { brainSystemPromptExpanded = !brainSystemPromptExpanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("System Prompt Override", style = MaterialTheme.typography.bodySmall)
+                        Icon(
+                            if (brainSystemPromptExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(visible = brainSystemPromptExpanded) {
+                        OutlinedTextField(
+                            value = brainSystemPrompt,
+                            onValueChange = { brainSystemPrompt = it },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                            maxLines = 10
+                        )
+                    }
+
+                    // Save button
+                    Button(
+                        onClick = {
+                            if (agentLoop != null) {
+                                val newConfig = BrainConfig(
+                                    provider = brainProvider,
+                                    apiKey = brainApiKey,
+                                    baseUrl = brainBaseUrl,
+                                    model = brainModel,
+                                    maxTokens = brainMaxTokens.toIntOrNull() ?: 8192,
+                                    systemPrompt = brainSystemPrompt,
+                                    enabled = brainApiKey.isNotBlank()
+                                )
+                                agentLoop.updateConfig(newConfig)
+                                testConnectionResult = "Configuration saved"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Save Brain Config")
+                    }
+
+                    // Test Connection button
+                    OutlinedButton(
+                        onClick = {
+                            if (agentLoop != null) {
+                                testConnectionRunning = true
+                                testConnectionResult = null
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val testConfig = BrainConfig(
+                                            provider = brainProvider,
+                                            apiKey = brainApiKey,
+                                            baseUrl = brainBaseUrl,
+                                            model = brainModel,
+                                            maxTokens = brainMaxTokens.toIntOrNull() ?: 8192,
+                                            enabled = brainApiKey.isNotBlank()
+                                        )
+                                        if (testConfig.apiKey.isBlank()) {
+                                            testConnectionResult = "Error: API key is required"
+                                            testConnectionRunning = false
+                                            return@launch
+                                        }
+                                        val client = BrainClient()
+                                        val startTime = System.currentTimeMillis()
+                                        val response = client.chat(
+                                            config = testConfig,
+                                            messages = listOf(
+                                                ChatMessage(role = "user", content = "Say hello in one word.")
+                                            ),
+                                            tools = emptyList()
+                                        )
+                                        val latency = System.currentTimeMillis() - startTime
+                                        if (response.finishReason == "error") {
+                                            testConnectionResult = "Error: ${response.content?.take(200)}"
+                                        } else {
+                                            testConnectionResult = "OK — ${latency}ms — ${response.content?.take(50)}"
+                                        }
+                                    } catch (e: Exception) {
+                                        testConnectionResult = "Error: ${e.message?.take(200)}"
+                                    }
+                                    testConnectionRunning = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !testConnectionRunning && brainApiKey.isNotBlank()
+                    ) {
+                        if (testConnectionRunning) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        } else {
+                            Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Test Connection")
+                    }
+
+                    // Test result
+                    if (testConnectionResult != null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (testConnectionResult!!.startsWith("OK"))
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = testConnectionResult!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(12.dp),
+                                maxLines = 3
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider()
 
             Spacer(modifier = Modifier.height(32.dp))
         }
