@@ -10,3 +10,6 @@
 local.properties
 *.apk
 *.aab
+build/
+*.apk
+local.properties

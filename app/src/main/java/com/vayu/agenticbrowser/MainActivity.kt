@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,6 +29,7 @@ import com.vayu.agenticbrowser.tunnel.TunnelManager
 import com.vayu.agenticbrowser.ui.screens.BrainScreen
 import com.vayu.agenticbrowser.ui.screens.BrowserScreen
 import com.vayu.agenticbrowser.ui.screens.SettingsScreen
+import com.vayu.agenticbrowser.ui.screens.SplashScreen
 import com.vayu.agenticbrowser.ui.screens.VaultScreen
 import com.vayu.agenticbrowser.ui.theme.VAYUTheme
 import com.vayu.agenticbrowser.vault.ProfileManager
@@ -93,33 +96,66 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
+                    var showSplash by remember { mutableStateOf(true) }
 
-                    NavHost(navController = navController, startDestination = "browser") {
-                        composable("browser") {
-                            BrowserScreen(
-                                agentConnected = mcpServer.isRunning,
-                                onNavigateToSettings = { navController.navigate("settings") },
-                                onNavigateToBrain = { navController.navigate("brain") },
-                                agentLoop = agentLoop
-                            )
-                        }
-                        composable("settings") {
-                            SettingsScreen(
-                                onBack = { navController.popBackStack() },
-                                onNavigateToVault = { navController.navigate("vault") },
-                                onNavigateToBrain = { navController.navigate("brain") },
-                                agentLoop = agentLoop
-                            )
-                        }
-                        composable("vault") {
-                            VaultScreen(onBack = { navController.popBackStack() })
-                        }
-                        composable("brain") {
-                            BrainScreen(
-                                onBack = { navController.popBackStack() },
-                                agentLoop = agentLoop
-                            )
+                    if (showSplash) {
+                        SplashScreen(onSplashComplete = { showSplash = false })
+                    } else {
+                        val navController = rememberNavController()
+
+                        NavHost(
+                            navController = navController,
+                            startDestination = "browser",
+                            enterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(350)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(350)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(350)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(350)
+                                )
+                            }
+                        ) {
+                            composable("browser") {
+                                BrowserScreen(
+                                    agentConnected = mcpServer.isRunning,
+                                    onNavigateToSettings = { navController.navigate("settings") },
+                                    onNavigateToBrain = { navController.navigate("brain") },
+                                    agentLoop = agentLoop
+                                )
+                            }
+                            composable("settings") {
+                                SettingsScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToVault = { navController.navigate("vault") },
+                                    onNavigateToBrain = { navController.navigate("brain") },
+                                    agentLoop = agentLoop
+                                )
+                            }
+                            composable("vault") {
+                                VaultScreen(onBack = { navController.popBackStack() })
+                            }
+                            composable("brain") {
+                                BrainScreen(
+                                    onBack = { navController.popBackStack() },
+                                    agentLoop = agentLoop
+                                )
+                            }
                         }
                     }
                 }

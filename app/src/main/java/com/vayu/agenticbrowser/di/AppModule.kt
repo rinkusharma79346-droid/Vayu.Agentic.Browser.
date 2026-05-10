@@ -94,7 +94,7 @@ object AppModule {
             pluginRegistry = pluginRegistry,
             toolExecutor = { tool, args ->
                 val jsonArgs = kotlinx.serialization.json.buildJsonObject {
-                    args.forEach { (k, v) -> put(k, v) }
+                    args.forEach { (k, v) -> put(k, kotlinx.serialization.json.JsonPrimitive(v)) }
                 }
                 mcpServer.executeToolDirectly(tool, jsonArgs)
             }

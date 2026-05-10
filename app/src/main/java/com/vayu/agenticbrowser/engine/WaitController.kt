@@ -5,6 +5,7 @@ import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.tabs.TabManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 

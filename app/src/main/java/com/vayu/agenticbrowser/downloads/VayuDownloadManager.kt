@@ -14,7 +14,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.util.UUID
 
 class VayuDownloadManager private constructor() {
 
@@ -69,7 +74,7 @@ class VayuDownloadManager private constructor() {
                     triggeredBy = DownloadTrigger.AGENT
                 )
 
-                _downloads.update { it + (downloadId to record) }
+                _downloads.update { current -> current + (downloadId to record) }
                 _newDownloadEvent.tryEmit(record)
                 startPolling(downloadId, systemDownloadId)
 
@@ -130,7 +135,7 @@ class VayuDownloadManager private constructor() {
                     triggeredBy = DownloadTrigger.AGENT
                 )
 
-                _downloads.update { it + (downloadId to record) }
+                _downloads.update { current -> current + (downloadId to record) }
                 _newDownloadEvent.tryEmit(record)
 
                 json.encodeToString(TriggerDownloadResult(downloadId = downloadId))
@@ -233,7 +238,7 @@ class VayuDownloadManager private constructor() {
                 triggeredBy = DownloadTrigger.USER
             )
 
-            _downloads.update { it + (downloadId to record) }
+            _downloads.update { current -> current + (downloadId to record) }
             _newDownloadEvent.tryEmit(record)
             startPolling(downloadId, systemDownloadId)
 
@@ -248,7 +253,8 @@ class VayuDownloadManager private constructor() {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         scope.launch {
-            while (isActive) {
+            var downloadComplete = false
+            while (isActive && !downloadComplete) {
                 delay(500)
 
                 val query = DownloadManager.Query().setFilterById(systemDownloadId)
@@ -301,7 +307,7 @@ class VayuDownloadManager private constructor() {
                                 currentRecord?.status == DownloadStatus.FAILED ||
                                 currentRecord?.status == DownloadStatus.CANCELLED
                             ) {
-                                break
+                                downloadComplete = true
                             }
                         }
                     }

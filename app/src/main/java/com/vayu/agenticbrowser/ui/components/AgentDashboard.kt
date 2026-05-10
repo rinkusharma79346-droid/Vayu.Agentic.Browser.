@@ -1,5 +1,6 @@
 package com.vayu.agenticbrowser.ui.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -13,14 +14,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vayu.agenticbrowser.brain.AgentState
 import com.vayu.agenticbrowser.downloads.DownloadStatus
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
+import com.vayu.agenticbrowser.ui.theme.*
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -49,13 +53,25 @@ fun AgentDashboard(
 
     // Agent state color
     val agentStateColor = when (agentState) {
-        AgentState.IDLE -> MaterialTheme.colorScheme.surfaceVariant
-        AgentState.THINKING -> MaterialTheme.colorScheme.tertiary
-        AgentState.EXECUTING -> MaterialTheme.colorScheme.primary
-        AgentState.WAITING -> MaterialTheme.colorScheme.secondary
-        AgentState.COMPLETED -> MaterialTheme.colorScheme.primary
-        AgentState.FAILED -> MaterialTheme.colorScheme.error
+        AgentState.IDLE -> VayuOnSurfaceDim
+        AgentState.THINKING -> VayuViolet
+        AgentState.EXECUTING -> VayuCyan
+        AgentState.WAITING -> VayuTeal
+        AgentState.COMPLETED -> VayuSuccess
+        AgentState.FAILED -> VayuError
     }
+
+    // Pulse animation for active agent
+    val infiniteTransition = rememberInfiniteTransition(label = "dashPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dashPulse"
+    )
 
     Box(
         modifier = Modifier
@@ -69,36 +85,41 @@ fun AgentDashboard(
             }
     ) {
         if (isMinimized) {
-            // Minimized: connection dot with agent state color ring
+            // Minimized: glowing connection dot with agent state ring
             Box(contentAlignment = Alignment.TopEnd) {
                 Surface(
                     shape = CircleShape,
-                    color = if (isConnected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp),
+                    color = if (isConnected) VayuSuccess else VayuError,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .shadow(4.dp, CircleShape),
                     onClick = { isMinimized = false }
                 ) {}
                 if (agentState != AgentState.IDLE) {
                     Surface(
                         shape = CircleShape,
-                        color = agentStateColor,
-                        modifier = Modifier.size(10.dp)
+                        color = agentStateColor.copy(alpha = pulseAlpha),
+                        modifier = Modifier
+                            .size(12.dp)
+                            .shadow(2.dp, CircleShape)
                     ) {}
                 } else if (isRecording) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.error,
+                        color = VayuError.copy(alpha = pulseAlpha),
                         modifier = Modifier.size(10.dp)
                     ) {}
                 }
             }
         } else {
-            // Expanded dashboard
+            // Expanded dashboard — immersive glass-morphism card
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-                tonalElevation = 4.dp,
-                modifier = Modifier.width(220.dp)
+                shape = RoundedCornerShape(16.dp),
+                color = VayuSurfaceOverlay,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .width(240.dp)
+                    .shadow(12.dp, RoundedCornerShape(16.dp))
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -119,14 +140,16 @@ fun AgentDashboard(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isConnected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.error
+                                        if (isConnected) VayuSuccess else VayuError
                                     )
                             )
                             Text(
                                 text = if (isConnected) "Connected" else "Offline",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                fontSize = 11.sp,
+                                color = if (isConnected) VayuSuccess else VayuError
                             )
                         }
 
@@ -137,12 +160,16 @@ fun AgentDashboard(
                             Icon(
                                 Icons.Default.ExpandLess,
                                 contentDescription = "Minimize",
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(14.dp),
+                                tint = VayuOnSurfaceVariant
                             )
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                    HorizontalDivider(
+                        color = VayuOnSurfaceDim.copy(alpha = 0.3f),
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
 
                     // Agent state indicator
                     if (agentState != AgentState.IDLE) {
@@ -151,14 +178,17 @@ fun AgentDashboard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Surface(
-                                modifier = Modifier.size(8.dp),
-                                shape = CircleShape,
-                                color = agentStateColor
-                            ) {}
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(agentStateColor.copy(alpha = pulseAlpha))
+                            )
                             Text(
                                 text = agentState.name,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 fontSize = 10.sp,
                                 color = agentStateColor
                             )
@@ -166,7 +196,7 @@ fun AgentDashboard(
                                 text = "($agentStepCount)",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 9.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = VayuOnSurfaceVariant
                             )
                         }
 
@@ -178,49 +208,16 @@ fun AgentDashboard(
                                 fontSize = 9.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = VayuOnSurfaceVariant
                             )
                         }
                     }
 
                     // Last tool
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Last:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(46.dp)
-                        )
-                        Text(
-                            text = lastToolName.ifBlank { "—" },
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    DashboardInfoRow("Last:", lastToolName.ifBlank { "\u2014" })
 
                     // Tab info
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Tab:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(46.dp)
-                        )
-                        Text(
-                            text = "$activeTabIndex / $tabCount",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    DashboardInfoRow("Tab:", "$activeTabIndex / $tabCount")
 
                     // Downloads
                     Row(
@@ -230,36 +227,40 @@ fun AgentDashboard(
                         Text(
                             text = "DL:",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(46.dp)
+                            color = VayuOnSurfaceDim,
+                            modifier = Modifier.width(38.dp),
+                            fontSize = 10.sp
                         )
                         Text(
                             text = if (activeDownloads > 0) "$activeDownloads active" else "none",
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 10.sp,
-                            color = if (activeDownloads > 0) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (activeDownloads > 0) VayuCyan else VayuOnSurfaceVariant
                         )
                     }
 
                     // Recording indicator
                     if (isRecording) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 1.dp))
+                        HorizontalDivider(
+                            color = VayuOnSurfaceDim.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Surface(
-                                modifier = Modifier.size(8.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.error
-                            ) {}
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(VayuError.copy(alpha = pulseAlpha))
+                            )
                             Text(
                                 text = "REC",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.error
+                                color = VayuError
                             )
                         }
                     }
@@ -271,21 +272,45 @@ fun AgentDashboard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Surface(
-                                modifier = Modifier.size(8.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.tertiary
-                            ) {}
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(VayuTeal)
+                            )
                             Text(
                                 text = "STEALTH",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = VayuTeal
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DashboardInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = VayuOnSurfaceDim,
+            modifier = Modifier.width(38.dp),
+            fontSize = 10.sp
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            maxLines = 1,
+            color = VayuOnSurface
+        )
     }
 }

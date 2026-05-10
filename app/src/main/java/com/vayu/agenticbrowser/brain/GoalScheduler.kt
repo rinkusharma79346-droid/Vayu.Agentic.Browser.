@@ -6,6 +6,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.vayu.agenticbrowser.common.Logger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -27,8 +30,8 @@ class GoalScheduler private constructor() {
     private var context: Context? = null
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    private val _scheduledGoals = kotlinx.coroutines.flow.MutableStateFlow<List<ScheduledGoal>>(emptyList())
-    val scheduledGoals: kotlinx.coroutines.flow.StateFlow<List<ScheduledGoal>> = _scheduledGoals.asStateFlow()
+    private val _scheduledGoals = MutableStateFlow<List<ScheduledGoal>>(emptyList())
+    val scheduledGoals: StateFlow<List<ScheduledGoal>> = _scheduledGoals.asStateFlow()
 
     fun init(ctx: Context) {
         context = ctx.applicationContext

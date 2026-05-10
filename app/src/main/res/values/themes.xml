@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.VAYUAgenticBrowser" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/ic_launcher_background</item>
+        <item name="colorPrimary">#4FC3F7</item>
         <item name="colorPrimaryVariant">#16213E</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnPrimary">#0A0E27</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">#0A0E27</item>
     </style>
 </resources>

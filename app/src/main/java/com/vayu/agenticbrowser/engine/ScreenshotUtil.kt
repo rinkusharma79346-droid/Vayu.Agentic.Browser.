@@ -7,6 +7,9 @@ import android.util.Base64
 import android.webkit.WebView
 import com.vayu.agenticbrowser.common.Logger
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.floatOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayOutputStream
 
 object ScreenshotUtil {
