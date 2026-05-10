@@ -109,6 +109,9 @@ dependencies {
 
     // JavaPoet workaround for Hilt + KSP
     implementation("com.squareup:javapoet:1.13.0")
+
+    // OkHttp for Brain LLM client
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 kapt {

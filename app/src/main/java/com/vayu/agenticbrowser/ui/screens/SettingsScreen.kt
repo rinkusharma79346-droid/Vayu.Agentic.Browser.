@@ -37,7 +37,8 @@ import java.net.NetworkInterface
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onNavigateToVault: () -> Unit
+    onNavigateToVault: () -> Unit,
+    onNavigateToBrain: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -226,13 +227,29 @@ fun SettingsScreen(
             )
 
             AnimatedVisibility(visible = accountsExpanded) {
-                Button(
-                    onClick = onNavigateToVault,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open Credential Vault")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onNavigateToVault,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Credential Vault")
+                    }
+
+                    // Brain / Autonomous Agent
+                    Button(
+                        onClick = onNavigateToBrain,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open AI Brain")
+                    }
                 }
             }
 

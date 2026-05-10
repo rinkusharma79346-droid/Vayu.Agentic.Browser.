@@ -1,7 +1,11 @@
 package com.vayu.agenticbrowser.di
 
+import android.content.Context
 import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.agent.SessionRecorder
+import com.vayu.agenticbrowser.brain.AgentLoop
+import com.vayu.agenticbrowser.brain.BrainClient
+import com.vayu.agenticbrowser.brain.GoalScheduler
 import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.DialogController
@@ -19,6 +23,7 @@ import com.vayu.agenticbrowser.vault.SmsOtpReader
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -26,131 +31,75 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Provides
-    @Singleton
-    fun provideWebViewManager(): WebViewManager {
-        return WebViewManager.getInstance()
-    }
+    @Provides @Singleton fun provideWebViewManager(): WebViewManager = WebViewManager.getInstance()
+    @Provides @Singleton fun provideTabManager(): TabManager = TabManager.getInstance()
+    @Provides @Singleton fun provideDownloadManager(): VayuDownloadManager = VayuDownloadManager.getInstance()
+    @Provides @Singleton fun provideProfileManager(): ProfileManager = ProfileManager.getInstance()
+    @Provides @Singleton fun provideBiometricAuth(): BiometricAuth = BiometricAuth.getInstance()
+    @Provides @Singleton fun provideSmsOtpReader(): SmsOtpReader = SmsOtpReader.getInstance()
+    @Provides @Singleton fun providePluginRegistry(): PluginRegistry = PluginRegistry.getInstance()
+    @Provides @Singleton fun provideTunnelManager(): TunnelManager = TunnelManager.getInstance()
+    @Provides @Singleton fun provideSessionRecorder(): SessionRecorder = SessionRecorder.getInstance()
+    @Provides @Singleton fun provideNetworkMonitor(): NetworkMonitor = NetworkMonitor.getInstance()
+    @Provides @Singleton fun provideGoalScheduler(): GoalScheduler = GoalScheduler.getInstance()
+    @Provides @Singleton fun provideBrainClient(): BrainClient = BrainClient()
 
-    @Provides
-    @Singleton
-    fun provideTabManager(): TabManager {
-        return TabManager.getInstance()
-    }
+    @Provides @Singleton
+    fun provideDomController(webViewManager: WebViewManager, tabManager: TabManager): DomController =
+        DomController(webViewManager, tabManager)
 
-    @Provides
-    @Singleton
-    fun provideDownloadManager(): VayuDownloadManager {
-        return VayuDownloadManager.getInstance()
-    }
+    @Provides @Singleton
+    fun provideWaitController(tabManager: TabManager, downloadManager: VayuDownloadManager): WaitController =
+        WaitController(tabManager, downloadManager)
 
-    @Provides
-    @Singleton
-    fun provideProfileManager(): ProfileManager {
-        return ProfileManager.getInstance()
-    }
+    @Provides @Singleton
+    fun provideFormDetector(domController: DomController): FormDetector = FormDetector(domController)
 
-    @Provides
-    @Singleton
-    fun provideBiometricAuth(): BiometricAuth {
-        return BiometricAuth.getInstance()
-    }
+    @Provides @Singleton
+    fun provideDialogController(): DialogController = DialogController()
 
-    @Provides
-    @Singleton
-    fun provideSmsOtpReader(): SmsOtpReader {
-        return SmsOtpReader.getInstance()
-    }
-
-    @Provides
-    @Singleton
-    fun providePluginRegistry(): PluginRegistry {
-        return PluginRegistry.getInstance()
-    }
-
-    @Provides
-    @Singleton
-    fun provideTunnelManager(): TunnelManager {
-        return TunnelManager.getInstance()
-    }
-
-    @Provides
-    @Singleton
-    fun provideSessionRecorder(): SessionRecorder {
-        return SessionRecorder.getInstance()
-    }
-
-    @Provides
-    @Singleton
-    fun provideNetworkMonitor(): NetworkMonitor {
-        return NetworkMonitor.getInstance()
-    }
-
-    @Provides
-    @Singleton
-    fun provideDomController(
-        webViewManager: WebViewManager,
-        tabManager: TabManager
-    ): DomController {
-        return DomController(webViewManager, tabManager)
-    }
-
-    @Provides
-    @Singleton
-    fun provideWaitController(
-        tabManager: TabManager,
-        downloadManager: VayuDownloadManager
-    ): WaitController {
-        return WaitController(tabManager, downloadManager)
-    }
-
-    @Provides
-    @Singleton
-    fun provideFormDetector(
-        domController: DomController
-    ): FormDetector {
-        return FormDetector(domController)
-    }
-
-    @Provides
-    @Singleton
-    fun provideDialogController(): DialogController {
-        return DialogController()
-    }
-
-    @Provides
-    @Singleton
+    @Provides @Singleton
     fun provideCredentialVault(
-        profileManager: ProfileManager,
-        biometricAuth: BiometricAuth,
-        domController: DomController,
-        tabManager: TabManager
-    ): CredentialVault {
-        return CredentialVault(profileManager, biometricAuth, domController, tabManager)
-    }
+        profileManager: ProfileManager, biometricAuth: BiometricAuth,
+        domController: DomController, tabManager: TabManager
+    ): CredentialVault = CredentialVault(profileManager, biometricAuth, domController, tabManager)
 
-    @Provides
-    @Singleton
+    @Provides @Singleton
     fun provideMcpServer(
-        domController: DomController,
-        tabManager: TabManager,
-        downloadManager: VayuDownloadManager,
-        waitController: WaitController,
-        credentialVault: CredentialVault,
-        profileManager: ProfileManager,
-        biometricAuth: BiometricAuth,
-        formDetector: FormDetector,
-        dialogController: DialogController,
-        smsOtpReader: SmsOtpReader,
+        domController: DomController, tabManager: TabManager,
+        downloadManager: VayuDownloadManager, waitController: WaitController,
+        credentialVault: CredentialVault, profileManager: ProfileManager,
+        biometricAuth: BiometricAuth, formDetector: FormDetector,
+        dialogController: DialogController, smsOtpReader: SmsOtpReader,
+        pluginRegistry: PluginRegistry, tunnelManager: TunnelManager,
+        sessionRecorder: SessionRecorder, networkMonitor: NetworkMonitor
+    ): McpServer = McpServer(
+        domController, tabManager, downloadManager, waitController,
+        credentialVault, profileManager, biometricAuth, formDetector, dialogController,
+        smsOtpReader, pluginRegistry, tunnelManager, sessionRecorder, networkMonitor
+    )
+
+    @Provides @Singleton
+    fun provideAgentLoop(
+        @ApplicationContext ctx: Context,
+        brainClient: BrainClient,
         pluginRegistry: PluginRegistry,
-        tunnelManager: TunnelManager,
-        sessionRecorder: SessionRecorder,
-        networkMonitor: NetworkMonitor
-    ): McpServer {
-        return McpServer(
-            domController, tabManager, downloadManager, waitController,
-            credentialVault, profileManager, biometricAuth, formDetector, dialogController,
-            smsOtpReader, pluginRegistry, tunnelManager, sessionRecorder, networkMonitor
+        mcpServer: McpServer,
+        goalScheduler: GoalScheduler
+    ): AgentLoop {
+        val agentLoop = AgentLoop(
+            context = ctx,
+            brainClient = brainClient,
+            pluginRegistry = pluginRegistry,
+            toolExecutor = { tool, args ->
+                val jsonArgs = kotlinx.serialization.json.buildJsonObject {
+                    args.forEach { (k, v) -> put(k, v) }
+                }
+                mcpServer.executeToolDirectly(tool, jsonArgs)
+            }
         )
+        // Wire the agent loop and goal scheduler back to McpServer
+        mcpServer.setBrainComponents(agentLoop, goalScheduler)
+        return agentLoop
     }
 }

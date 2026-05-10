@@ -406,6 +406,49 @@ object ToolRegistry {
             name = "browser_info",
             description = "Get comprehensive browser status information including app version, tab count, connection status, tunnel URL, plugin count, and platform.",
             parameters = mapOf()
+        ),
+
+        // ===== Phase 5: Brain / Autonomous Agent Tools =====
+        ToolDef(
+            name = "brain_run",
+            description = "Start the autonomous AI agent to achieve a specified goal. The agent will plan steps, execute browser tools in a loop, and complete the multi-step workflow autonomously.",
+            parameters = mapOf(
+                "goal" to ToolParam(type = "string", description = "The goal for the autonomous agent to accomplish", required = true)
+            )
+        ),
+        ToolDef(
+            name = "brain_stop",
+            description = "Stop the currently running autonomous agent goal execution.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "brain_status",
+            description = "Get the current status of the autonomous agent including state, current goal, step count, token usage, and recent step log.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "brain_config",
+            description = "Get or update the brain (LLM) configuration including provider, model, base URL, and API key status.",
+            parameters = mapOf(
+                "provider" to ToolParam(type = "string", description = "LLM provider: GEMINI, GROQ, OPENROUTER, or CUSTOM", required = false),
+                "apiKey" to ToolParam(type = "string", description = "API key for the LLM provider", required = false),
+                "baseUrl" to ToolParam(type = "string", description = "Custom base URL for the LLM API endpoint", required = false),
+                "model" to ToolParam(type = "string", description = "Model name to use for completions", required = false),
+                "maxTokens" to ToolParam(type = "integer", description = "Maximum tokens for LLM responses (default: 8192)", required = false)
+            )
+        ),
+        ToolDef(
+            name = "brain_list_goals",
+            description = "List all scheduled autonomous agent goals with their scheduled times, recurrence, and completion status.",
+            parameters = mapOf()
+        ),
+        ToolDef(
+            name = "brain_schedule",
+            description = "Schedule an autonomous agent goal to run at a future time. The agent will wake up and execute the goal even when the app is backgrounded.",
+            parameters = mapOf(
+                "goal" to ToolParam(type = "string", description = "The goal for the agent to accomplish when triggered", required = true),
+                "delayMinutes" to ToolParam(type = "integer", description = "Number of minutes from now to schedule the goal", required = true)
+            )
         )
     )
 

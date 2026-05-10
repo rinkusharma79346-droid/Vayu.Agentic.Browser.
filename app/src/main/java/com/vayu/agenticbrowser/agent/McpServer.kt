@@ -20,6 +20,9 @@ import com.vayu.agenticbrowser.vault.CredentialVault
 import com.vayu.agenticbrowser.vault.ProfileManager
 import com.vayu.agenticbrowser.vault.SmsOtpReader
 import com.vayu.agenticbrowser.vault.TotpGenerator
+import com.vayu.agenticbrowser.brain.AgentLoop
+import com.vayu.agenticbrowser.brain.BrainConfig
+import com.vayu.agenticbrowser.brain.GoalScheduler
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
@@ -52,6 +55,16 @@ class McpServer(
     private val networkMonitor: NetworkMonitor
 ) {
 
+    private lateinit var agentLoop: AgentLoop
+    private lateinit var goalScheduler: GoalScheduler
+    private var brainComponentsSet = false
+
+    fun setBrainComponents(loop: AgentLoop, scheduler: GoalScheduler) {
+        agentLoop = loop
+        goalScheduler = scheduler
+        brainComponentsSet = true
+    }
+
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private var server: ApplicationEngine? = null
@@ -64,6 +77,25 @@ class McpServer(
     val connectedSince: StateFlow<Long> = _connectedSince.asStateFlow()
 
     private val pairingCode = "vayu1234"
+
+    /**
+     * Direct tool execution for the AgentLoop brain.
+     * Bypasses WebSocket, executes the tool and returns the result string.
+     */
+    suspend fun executeToolDirectly(tool: String, args: JsonObject): String {
+        return try {
+            val id = java.util.UUID.randomUUID().toString()
+            val response = handleToolCall(id, tool, args)
+            val responseJson = json.parseToJsonElement(response).jsonObject
+            when {
+                responseJson.containsKey("result") -> responseJson["result"].toString()
+                responseJson.containsKey("error") -> responseJson["error"].toString()
+                else -> response
+            }
+        } catch (e: Exception) {
+            """{"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
 
     fun setContext(ctx: Context) {
         appContext = ctx.applicationContext
@@ -639,7 +671,97 @@ class McpServer(
                     val tunnelUrl = tunnelManager.tunnelUrl.value
                     val pluginCount = pluginRegistry.activePlugins.value.size
                     val tabCount = tabManager.tabs.value.size
-                    """{"appVersion":"1.0.0-alpha","tabCount":$tabCount,"connectedSince":${_connectedSince.value},"tunnelUrl":${if (tunnelUrl != null) "\"$tunnelUrl\"" else "null"},"pluginCount":$pluginCount,"platform":"android","networkConnected":${networkMonitor.isConnected.value}}"""
+                    val brainState = agentLoop.state.value.name
+                    """{"appVersion":"1.0.0","tabCount":$tabCount,"connectedSince":${_connectedSince.value},"tunnelUrl":${if (tunnelUrl != null) "\"$tunnelUrl\"" else "null"},"pluginCount":$pluginCount,"platform":"android","networkConnected":${networkMonitor.isConnected.value},"brainState":"$brainState"}"""
+                }
+
+                // ===== Phase 5: Brain / Autonomous Agent Tools =====
+                "brain_run" -> {
+                    val goal = args["goal"]?.jsonPrimitive?.content ?: ""
+                    if (goal.isBlank()) {
+                        """{"error":"Goal is required"}"""
+                    } else {
+                        agentLoop.runGoal(goal)
+                        """{"success":true,"goal":"${goal.replace("\"", "\\\"")}","state":"${agentLoop.state.value.name}"}"""
+                    }
+                }
+
+                "brain_stop" -> {
+                    agentLoop.stop()
+                    """{"success":true,"state":"IDLE"}"""
+                }
+
+                "brain_status" -> {
+                    val stats = agentLoop.getStats()
+                    val stepLog = agentLoop.stepLog.value.takeLast(5).map { step ->
+                        mapOf(
+                            "index" to step.index,
+                            "thought" to (step.thought?.take(100) ?: ""),
+                            "tool" to (step.tool ?: ""),
+                            "result" to (step.result?.take(100) ?: "")
+                        )
+                    }
+                    json.encodeToString(mapOf(
+                        "state" to stats["state"].toString(),
+                        "currentGoal" to stats["currentGoal"].toString(),
+                        "totalSteps" to stats["totalSteps"].toString(),
+                        "totalTokens" to stats["totalTokens"].toString(),
+                        "recentSteps" to stepLog
+                    ))
+                }
+
+                "brain_config" -> {
+                    val config = agentLoop.getConfig()
+                    val hasApiKey = config.apiKey.isNotBlank()
+
+                    // Check if any config updates were provided
+                    val newProvider = args["provider"]?.jsonPrimitive?.contentOrNull
+                    val newApiKey = args["apiKey"]?.jsonPrimitive?.contentOrNull
+                    val newBaseUrl = args["baseUrl"]?.jsonPrimitive?.contentOrNull
+                    val newModel = args["model"]?.jsonPrimitive?.contentOrNull
+                    val newMaxTokens = args["maxTokens"]?.jsonPrimitive?.intOrNull
+
+                    if (newProvider != null || newApiKey != null || newBaseUrl != null || newModel != null || newMaxTokens != null) {
+                        val updatedConfig = config.copy(
+                            provider = newProvider?.let {
+                                try { com.vayu.agenticbrowser.brain.LlmProvider.valueOf(it) } catch (_: Exception) { config.provider }
+                            } ?: config.provider,
+                            apiKey = newApiKey ?: config.apiKey,
+                            baseUrl = newBaseUrl ?: config.baseUrl,
+                            model = newModel ?: config.model,
+                            maxTokens = newMaxTokens ?: config.maxTokens,
+                            enabled = (newApiKey ?: config.apiKey).isNotBlank()
+                        )
+                        agentLoop.updateConfig(updatedConfig)
+                        """{"success":true,"provider":"${updatedConfig.provider.name}","model":"${updatedConfig.effectiveModel()}","hasApiKey":${updatedConfig.apiKey.isNotBlank()},"enabled":${updatedConfig.enabled}}"""
+                    } else {
+                        """{"provider":"${config.provider.name}","model":"${config.effectiveModel()}","baseUrl":"${config.effectiveBaseUrl()}","maxTokens":${config.maxTokens},"hasApiKey":$hasApiKey,"enabled":${config.enabled}}"""
+                    }
+                }
+
+                "brain_list_goals" -> {
+                    val goals = goalScheduler.listGoals()
+                    json.encodeToString(goals.map { g ->
+                        mapOf(
+                            "id" to g.id,
+                            "goal" to g.goal,
+                            "scheduledAt" to g.scheduledAt,
+                            "completed" to g.completed,
+                            "recurring" to (g.recurringIntervalMs != null)
+                        )
+                    })
+                }
+
+                "brain_schedule" -> {
+                    val goal = args["goal"]?.jsonPrimitive?.content ?: ""
+                    val delayMinutes = args["delayMinutes"]?.jsonPrimitive?.intOrNull ?: 60
+                    if (goal.isBlank()) {
+                        """{"error":"Goal is required"}"""
+                    } else {
+                        val scheduledAt = System.currentTimeMillis() + (delayMinutes * 60_000L)
+                        val scheduledGoal = goalScheduler.scheduleGoal(goal, scheduledAt)
+                        """{"success":true,"id":"${scheduledGoal.id}","scheduledAt":$scheduledAt,"delayMinutes":$delayMinutes}"""
+                    }
                 }
 
                 else -> {

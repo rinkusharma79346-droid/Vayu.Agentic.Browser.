@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.agent.SessionRecorder
+import com.vayu.agenticbrowser.brain.AgentLoop
+import com.vayu.agenticbrowser.brain.GoalScheduler
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
@@ -21,6 +23,7 @@ import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tabs.TabManager
 import com.vayu.agenticbrowser.tunnel.TunnelManager
+import com.vayu.agenticbrowser.ui.screens.BrainScreen
 import com.vayu.agenticbrowser.ui.screens.BrowserScreen
 import com.vayu.agenticbrowser.ui.screens.SettingsScreen
 import com.vayu.agenticbrowser.ui.screens.VaultScreen
@@ -37,32 +40,17 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject
-    lateinit var mcpServer: McpServer
-
-    @Inject
-    lateinit var tabManager: TabManager
-
-    @Inject
-    lateinit var downloadManager: VayuDownloadManager
-
-    @Inject
-    lateinit var profileManager: ProfileManager
-
-    @Inject
-    lateinit var smsOtpReader: SmsOtpReader
-
-    @Inject
-    lateinit var pluginRegistry: PluginRegistry
-
-    @Inject
-    lateinit var tunnelManager: TunnelManager
-
-    @Inject
-    lateinit var sessionRecorder: SessionRecorder
-
-    @Inject
-    lateinit var networkMonitor: NetworkMonitor
+    @Inject lateinit var mcpServer: McpServer
+    @Inject lateinit var tabManager: TabManager
+    @Inject lateinit var downloadManager: VayuDownloadManager
+    @Inject lateinit var profileManager: ProfileManager
+    @Inject lateinit var smsOtpReader: SmsOtpReader
+    @Inject lateinit var pluginRegistry: PluginRegistry
+    @Inject lateinit var tunnelManager: TunnelManager
+    @Inject lateinit var sessionRecorder: SessionRecorder
+    @Inject lateinit var networkMonitor: NetworkMonitor
+    @Inject lateinit var agentLoop: AgentLoop
+    @Inject lateinit var goalScheduler: GoalScheduler
 
     private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -81,7 +69,7 @@ class MainActivity : ComponentActivity() {
         tunnelManager.init(applicationContext)
         sessionRecorder.init(applicationContext)
         networkMonitor.init(applicationContext)
-
+        goalScheduler.init(applicationContext)
         mcpServer.setContext(applicationContext)
 
         // Start MCP server on app launch
@@ -109,20 +97,24 @@ class MainActivity : ComponentActivity() {
                         composable("browser") {
                             BrowserScreen(
                                 agentConnected = mcpServer.isRunning,
-                                onNavigateToSettings = {
-                                    navController.navigate("settings")
-                                }
+                                onNavigateToSettings = { navController.navigate("settings") },
+                                onNavigateToBrain = { navController.navigate("brain") }
                             )
                         }
                         composable("settings") {
                             SettingsScreen(
                                 onBack = { navController.popBackStack() },
-                                onNavigateToVault = { navController.navigate("vault") }
+                                onNavigateToVault = { navController.navigate("vault") },
+                                onNavigateToBrain = { navController.navigate("brain") }
                             )
                         }
                         composable("vault") {
-                            VaultScreen(
-                                onBack = { navController.popBackStack() }
+                            VaultScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable("brain") {
+                            BrainScreen(
+                                onBack = { navController.popBackStack() },
+                                agentLoop = agentLoop
                             )
                         }
                     }

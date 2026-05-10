@@ -40,7 +40,8 @@ import kotlinx.coroutines.flow.StateFlow
 @Composable
 fun BrowserScreen(
     agentConnected: StateFlow<Boolean>,
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToBrain: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var urlText by remember { mutableStateOf("https://www.google.com") }
@@ -130,6 +131,14 @@ fun BrowserScreen(
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = "Go"
+                    )
+                }
+
+                // Brain icon
+                IconButton(onClick = onNavigateToBrain) {
+                    Icon(
+                        imageVector = Icons.Default.Psychology,
+                        contentDescription = "AI Brain"
                     )
                 }
 
