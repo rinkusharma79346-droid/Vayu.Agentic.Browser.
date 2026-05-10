@@ -107,6 +107,13 @@ class McpServer(
     /** SSE clients for streaming responses — each client has a channel to receive SSE data */
     private val sseClients = ConcurrentHashMap<String, Channel<String>>()
 
+    /** Relay client for connecting to the Render MCP Relay Server */
+    private var relayClient: RelayClient? = null
+
+    /** Relay connection status for UI */
+    val relayConnected: StateFlow<Boolean> get() = relayClient?.connected ?: MutableStateFlow(false).asStateFlow()
+    val relayStatus: StateFlow<RelayStatus> get() = relayClient?.status ?: MutableStateFlow(RelayStatus.DISCONNECTED).asStateFlow()
+
     /** Number of connected SSE clients */
     val sseClientCount: Int get() = sseClients.size
 
@@ -372,6 +379,11 @@ class McpServer(
             return
         }
 
+        // Connect to the Render relay server — bridges Claude AI to this browser
+        relayClient = RelayClient(this)
+        relayClient?.connect()
+        Logger.i("VAYU_MCP: Relay client connecting to Render server...")
+
         // Check Render SSE availability in background — don't block the UI
         renderCheckScope.launch {
             Logger.i("VAYU_MCP: Checking Render SSE availability...")
@@ -422,6 +434,8 @@ class McpServer(
     }
 
     fun stop() {
+        relayClient?.disconnect()
+        relayClient = null
         sseClients.clear()
         server?.stop(1000, 2000)
         server = null
@@ -431,7 +445,10 @@ class McpServer(
         Logger.i("MCP Server stopped")
     }
 
-    private suspend fun handleMessage(rawMessage: String): String {
+    /**
+     * Process a raw MCP message. Public so RelayClient can forward relay requests here.
+     */
+    suspend fun handleMessage(rawMessage: String): String {
         return try {
             val message = json.parseToJsonElement(rawMessage).jsonObject
             val type = message["type"]?.jsonPrimitive?.content ?: ""

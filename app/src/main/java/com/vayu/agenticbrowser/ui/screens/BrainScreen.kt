@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.vayu.agenticbrowser.agent.McpConfig
 import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.agent.McpStatus
+import com.vayu.agenticbrowser.agent.RelayStatus
 import com.vayu.agenticbrowser.brain.*
 import com.vayu.agenticbrowser.common.Logger
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +71,8 @@ fun BrainScreen(
     val mcpRunning by mcpServer.isRunning.collectAsState()
     val mcpStatus by mcpServer.mcpStatus.collectAsState()
     val connectedSince by mcpServer.connectedSince.collectAsState()
+    val relayConnected by mcpServer.relayConnected.collectAsState()
+    val relayStatusVal by mcpServer.relayStatus.collectAsState()
 
     var goalInput by remember { mutableStateOf("") }
     var configExpanded by remember { mutableStateOf(false) }
@@ -230,6 +233,43 @@ fun BrainScreen(
                                 McpStatus.OFFLINE -> Color(0xFFFF3D57)
                             }
                         )
+                    }
+
+                    // Relay status indicator
+                    if (mcpRunning) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CloudSync,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = when (relayStatusVal) {
+                                    RelayStatus.CONNECTED -> Color(0xFF00E5FF)
+                                    RelayStatus.CONNECTING, RelayStatus.AUTHENTICATING -> Color(0xFFFFB300)
+                                    RelayStatus.FAILED -> Color(0xFFFF3D57)
+                                    RelayStatus.DISCONNECTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            Text(
+                                text = "Relay: " + when (relayStatusVal) {
+                                    RelayStatus.CONNECTED -> "Connected to Render"
+                                    RelayStatus.CONNECTING -> "Connecting..."
+                                    RelayStatus.AUTHENTICATING -> "Authenticating..."
+                                    RelayStatus.FAILED -> "Connection failed"
+                                    RelayStatus.DISCONNECTED -> "Disconnected"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = when (relayStatusVal) {
+                                    RelayStatus.CONNECTED -> Color(0xFF00E5FF)
+                                    RelayStatus.CONNECTING, RelayStatus.AUTHENTICATING -> Color(0xFFFFB300)
+                                    RelayStatus.FAILED -> Color(0xFFFF3D57)
+                                    RelayStatus.DISCONNECTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
                     }
 
                     // Connection details — visible when server is running

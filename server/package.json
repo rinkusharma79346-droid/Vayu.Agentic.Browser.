@@ -1,0 +1,21 @@
+{
+  "name": "vayu-mcp-relay",
+  "version": "1.3.0",
+  "description": "VAYU Agentic Browser - MCP Relay Server for Render. Bridges Claude AI (SSE) to Android Browser (WebSocket).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  },
+  "keywords": ["mcp", "sse", "relay", "vayu", "browser", "claude"],
+  "license": "MIT"
+}
