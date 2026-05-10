@@ -33,6 +33,8 @@ import com.vayu.agenticbrowser.engine.WebViewManager
 import com.vayu.agenticbrowser.tabs.TabManager
 import com.vayu.agenticbrowser.tabs.TabState
 import com.vayu.agenticbrowser.tunnel.TunnelManager
+import com.vayu.agenticbrowser.brain.AgentLoop
+import com.vayu.agenticbrowser.brain.AgentState
 import com.vayu.agenticbrowser.ui.components.AgentDashboard
 import kotlinx.coroutines.flow.StateFlow
 
@@ -41,7 +43,8 @@ import kotlinx.coroutines.flow.StateFlow
 fun BrowserScreen(
     agentConnected: StateFlow<Boolean>,
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToBrain: () -> Unit = {}
+    onNavigateToBrain: () -> Unit = {},
+    agentLoop: AgentLoop? = null
 ) {
     val context = LocalContext.current
     var urlText by remember { mutableStateOf("https://www.google.com") }
@@ -64,6 +67,11 @@ fun BrowserScreen(
     }
 
     val stealthEnabled = StealthController.isStealthModeEnabled()
+
+    // Agent state for dashboard
+    val agentState by (agentLoop?.state ?: kotlinx.coroutines.flow.MutableStateFlow(AgentState.IDLE)).collectAsState()
+    val currentGoal by (agentLoop?.currentGoal ?: kotlinx.coroutines.flow.MutableStateFlow<String?>(null)).collectAsState()
+    val agentStepCount by (agentLoop?.totalSteps ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
 
     // Initialize tab manager with context on first composition
     LaunchedEffect(Unit) {
@@ -224,7 +232,10 @@ fun BrowserScreen(
                 activeTabIndex = tabs.indexOfFirst { it.tabId == activeTabId }.coerceAtLeast(0),
                 downloadManager = downloadMgr,
                 isRecording = isRecording,
-                stealthEnabled = stealthEnabled
+                stealthEnabled = stealthEnabled,
+                agentState = agentState,
+                currentGoal = currentGoal,
+                agentStepCount = agentStepCount
             )
         }
 

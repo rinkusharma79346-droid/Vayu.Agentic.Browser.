@@ -1,0 +1,9 @@
+{
+  "id": "builtin_research_summarize",
+  "name": "Research & Summarize Topic",
+  "description": "Search for a topic on Google, open the top 3 results in separate tabs, read each article, then write a comprehensive 500-word summary combining all sources and save it as a downloaded text file.",
+  "goalPrompt": "Search for [TOPIC] on Google, open the top 3 results in separate tabs, read each article, then write a comprehensive 500-word summary combining all sources and save it by evaluating a JS snippet that triggers a download of the text.",
+  "schedule": null,
+  "createdAt": 0,
+  "isBuiltIn": true
+}

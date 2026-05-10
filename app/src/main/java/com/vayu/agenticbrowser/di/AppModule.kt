@@ -6,6 +6,7 @@ import com.vayu.agenticbrowser.agent.SessionRecorder
 import com.vayu.agenticbrowser.brain.AgentLoop
 import com.vayu.agenticbrowser.brain.BrainClient
 import com.vayu.agenticbrowser.brain.GoalScheduler
+import com.vayu.agenticbrowser.brain.WorkflowEngine
 import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.engine.DialogController
@@ -98,8 +99,20 @@ object AppModule {
                 mcpServer.executeToolDirectly(tool, jsonArgs)
             }
         )
-        // Wire the agent loop and goal scheduler back to McpServer
+        // Wire the agent loop and goal scheduler to McpServer
         mcpServer.setBrainComponents(agentLoop, goalScheduler)
         return agentLoop
+    }
+
+    @Provides @Singleton
+    fun provideWorkflowEngine(
+        @ApplicationContext ctx: Context,
+        agentLoop: AgentLoop,
+        mcpServer: McpServer
+    ): WorkflowEngine {
+        val engine = WorkflowEngine(ctx, agentLoop)
+        // Wire the WorkflowEngine to McpServer for workflow tool dispatching
+        mcpServer.setWorkflowEngine(engine)
+        return engine
     }
 }

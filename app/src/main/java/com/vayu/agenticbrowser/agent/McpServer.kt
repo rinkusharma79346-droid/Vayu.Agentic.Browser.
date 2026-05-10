@@ -23,6 +23,7 @@ import com.vayu.agenticbrowser.vault.TotpGenerator
 import com.vayu.agenticbrowser.brain.AgentLoop
 import com.vayu.agenticbrowser.brain.BrainConfig
 import com.vayu.agenticbrowser.brain.GoalScheduler
+import com.vayu.agenticbrowser.brain.WorkflowEngine
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
@@ -57,12 +58,17 @@ class McpServer(
 
     private lateinit var agentLoop: AgentLoop
     private lateinit var goalScheduler: GoalScheduler
+    private var workflowEngine: WorkflowEngine? = null
     private var brainComponentsSet = false
 
     fun setBrainComponents(loop: AgentLoop, scheduler: GoalScheduler) {
         agentLoop = loop
         goalScheduler = scheduler
         brainComponentsSet = true
+    }
+
+    fun setWorkflowEngine(engine: WorkflowEngine) {
+        workflowEngine = engine
     }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -761,6 +767,58 @@ class McpServer(
                         val scheduledAt = System.currentTimeMillis() + (delayMinutes * 60_000L)
                         val scheduledGoal = goalScheduler.scheduleGoal(goal, scheduledAt)
                         """{"success":true,"id":"${scheduledGoal.id}","scheduledAt":$scheduledAt,"delayMinutes":$delayMinutes}"""
+                    }
+                }
+
+                // ===== Phase 5: Workflow Tools =====
+                "workflow_list" -> {
+                    val engine = workflowEngine
+                    if (engine == null) {
+                        """{"error":"WorkflowEngine not initialized"}"""
+                    } else {
+                        val workflows = engine.listWorkflows()
+                        json.encodeToString(workflows.map { w ->
+                            mapOf(
+                                "id" to w.id,
+                                "name" to w.name,
+                                "description" to w.description,
+                                "goalPrompt" to w.goalPrompt,
+                                "isBuiltIn" to w.isBuiltIn,
+                                "schedule" to (w.schedule ?: "")
+                            )
+                        })
+                    }
+                }
+
+                "workflow_run" -> {
+                    val engine = workflowEngine
+                    val workflowId = args["id"]?.jsonPrimitive?.content ?: ""
+                    if (engine == null) {
+                        """{"error":"WorkflowEngine not initialized"}"""
+                    } else if (workflowId.isBlank()) {
+                        """{"error":"Workflow ID is required"}"""
+                    } else {
+                        engine.runWorkflow(workflowId)
+                    }
+                }
+
+                "workflow_save" -> {
+                    val engine = workflowEngine
+                    val name = args["name"]?.jsonPrimitive?.content ?: ""
+                    val description = args["description"]?.jsonPrimitive?.content ?: ""
+                    val goalPrompt = args["goalPrompt"]?.jsonPrimitive?.content ?: ""
+                    if (engine == null) {
+                        """{"error":"WorkflowEngine not initialized"}"""
+                    } else if (name.isBlank() || goalPrompt.isBlank()) {
+                        """{"error":"Name and goalPrompt are required"}"""
+                    } else {
+                        val workflow = com.vayu.agenticbrowser.brain.Workflow(
+                            name = name,
+                            description = description,
+                            goalPrompt = goalPrompt
+                        )
+                        val saved = engine.saveWorkflow(workflow)
+                        """{"success":true,"id":"${saved.id}","name":"${saved.name.replace("\"", "\\\"")}"}"""
                     }
                 }
 

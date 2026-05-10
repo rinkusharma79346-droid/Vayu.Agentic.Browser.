@@ -16,6 +16,7 @@ import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.agent.SessionRecorder
 import com.vayu.agenticbrowser.brain.AgentLoop
 import com.vayu.agenticbrowser.brain.GoalScheduler
+import com.vayu.agenticbrowser.brain.WorkflowEngine
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var agentLoop: AgentLoop
     @Inject lateinit var goalScheduler: GoalScheduler
+    @Inject lateinit var workflowEngine: WorkflowEngine
 
     private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -98,14 +100,16 @@ class MainActivity : ComponentActivity() {
                             BrowserScreen(
                                 agentConnected = mcpServer.isRunning,
                                 onNavigateToSettings = { navController.navigate("settings") },
-                                onNavigateToBrain = { navController.navigate("brain") }
+                                onNavigateToBrain = { navController.navigate("brain") },
+                                agentLoop = agentLoop
                             )
                         }
                         composable("settings") {
                             SettingsScreen(
                                 onBack = { navController.popBackStack() },
                                 onNavigateToVault = { navController.navigate("vault") },
-                                onNavigateToBrain = { navController.navigate("brain") }
+                                onNavigateToBrain = { navController.navigate("brain") },
+                                agentLoop = agentLoop
                             )
                         }
                         composable("vault") {
