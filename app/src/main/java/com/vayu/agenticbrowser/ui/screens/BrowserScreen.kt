@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.vayu.agenticbrowser.agent.McpConfig
 import com.vayu.agenticbrowser.agent.McpStatus
 import com.vayu.agenticbrowser.agent.SessionRecorder
 import com.vayu.agenticbrowser.downloads.DownloadStatus
@@ -347,6 +348,23 @@ fun BrowserScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    // Render SSE URL chip (copyable)
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Render SSE", McpConfig.RENDER_SSE_URL))
+                        }
+                    ) {
+                        Text(
+                            text = "SSE: ${McpConfig.RENDER_SSE_URL.take(35)}...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
         }

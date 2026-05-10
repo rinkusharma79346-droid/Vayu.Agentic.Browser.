@@ -34,9 +34,13 @@ import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -338,53 +342,77 @@ class McpServer(
         }
     }
 
+    /** Render SSE reachability flag, updated by background health check */
+    private val _renderAvailable = MutableStateFlow(false)
+    val renderAvailable: StateFlow<Boolean> = _renderAvailable.asStateFlow()
+
+    /** Background scope for Render health check */
+    private val renderCheckScope = CoroutineScope(Dispatchers.IO)
+
     /**
-     * Start with fallback: try Render SSE connection first, then fall back to local WS.
+     * Start with fallback: start local server immediately, then check Render SSE async.
      * This is what the UI toggle calls.
+     *
+     * Previous bug: checkRenderSse() blocked for up to 30s because SSE streams
+     * never close, making the toggle appear unresponsive. Now we start local
+     * server first and check Render in the background.
      */
     suspend fun startWithFallback() {
         _mcpStatus.value = McpStatus.RETRYING
-        Logger.i("VAYU_MCP: Attempting Render SSE connection to ${McpConfig.RENDER_SSE_URL}")
-        
-        // Try Render SSE first
-        val renderAvailable = checkRenderSse()
-        if (renderAvailable) {
-            Logger.i("VAYU_MCP: Render SSE is available at ${McpConfig.RENDER_SSE_URL}")
-        } else {
-            Logger.w("VAYU_MCP: Render SSE not available, will use local server only")
-        }
-        
-        // Always start the local server too (it's needed for local MCP clients)
+
+        // Start local server FIRST (instant, never blocks)
         start()
-        
+
         if (_isRunning.value) {
             _mcpStatus.value = McpStatus.CONNECTED
-            Logger.i("VAYU_MCP: MCP server ready. Render: $renderAvailable, Local: true")
+            Logger.i("VAYU_MCP: Local MCP server started on port $port")
         } else {
             _mcpStatus.value = McpStatus.OFFLINE
-            Logger.e("VAYU_MCP: Failed to start any MCP server")
+            Logger.e("VAYU_MCP: Failed to start local MCP server")
+            return
+        }
+
+        // Check Render SSE availability in background — don't block the UI
+        renderCheckScope.launch {
+            Logger.i("VAYU_MCP: Checking Render SSE availability...")
+            val available = checkRenderSse()
+            _renderAvailable.value = available
+            if (available) {
+                Logger.i("VAYU_MCP: Render SSE is reachable at ${McpConfig.RENDER_SSE_URL}")
+            } else {
+                Logger.w("VAYU_MCP: Render SSE not reachable — local server only")
+            }
         }
     }
     
     /**
      * Check if the Render SSE endpoint is reachable.
+     *
+     * Uses a HEAD request to the base URL (not the /sse endpoint) to avoid
+     * blocking on the SSE stream. Render free-tier cold starts can take 30s+,
+     * so we use a short connect timeout and don't read the response body.
      */
     private suspend fun checkRenderSse(): Boolean {
         return try {
-            kotlinx.coroutines.withTimeout(McpConfig.CONNECTION_TIMEOUT_MS) {
+            withTimeout(15_000L) {
                 val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(McpConfig.CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                    .readTimeout(10_000, TimeUnit.MILLISECONDS)
+                    .connectTimeout(10_000, TimeUnit.MILLISECONDS)
+                    .readTimeout(5_000, TimeUnit.MILLISECONDS)
+                    .followRedirects(true)
+                    .followSslRedirects(true)
                     .build()
+                // Hit the base URL with HEAD — much faster than full SSE GET
+                val baseUrl = McpConfig.RENDER_SSE_URL.substringBefore("/sse")
                 val request = okhttp3.Request.Builder()
-                    .url(McpConfig.RENDER_SSE_URL)
-                    .header("Accept", "text/event-stream")
+                    .url(baseUrl)
+                    .head()
                     .build()
                 val response = client.newCall(request).execute()
-                val available = response.isSuccessful || response.code == 200
                 val code = response.code
                 response.close()
-                Logger.i("VAYU_MCP: Render SSE check result: $available (HTTP $code)")
+                // Any HTTP response (even 404) means the server is up
+                val available = code > 0
+                Logger.i("VAYU_MCP: Render health check result: $available (HTTP $code)")
                 available
             }
         } catch (e: Exception) {

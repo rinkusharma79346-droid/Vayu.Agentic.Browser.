@@ -10,6 +10,9 @@ on:
     branches:
       - main
 
+env:
+  MCP_RENDER_URL: "https://j-a-r-v-i-s-ktlh.onrender.com/sse"
+
 jobs:
   build:
     runs-on: ubuntu-latest
