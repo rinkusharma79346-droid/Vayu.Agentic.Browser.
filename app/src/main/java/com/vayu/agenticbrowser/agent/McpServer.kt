@@ -96,9 +96,6 @@ class McpServer(
     /** Server name — exposed for UI display */
     val serverName: String = McpConfig.SERVER_NAME
     
-    /** Render SSE URL for Claude AI (remote) */
-    val renderSseUrl: String = McpConfig.RENDER_SSE_URL
-
     /** MCP connection status for UI */
     private val _mcpStatus = MutableStateFlow(McpStatus.OFFLINE)
     val mcpStatus: StateFlow<McpStatus> = _mcpStatus.asStateFlow()
