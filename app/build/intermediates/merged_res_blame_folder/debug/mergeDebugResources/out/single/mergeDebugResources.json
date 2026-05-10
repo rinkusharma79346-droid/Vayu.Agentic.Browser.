@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_plugin_youtube_upload.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/plugin_youtube_upload.json"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_workflow_social_media_post.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/workflow_social_media_post.json"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_plugin_google_ai_studio.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/plugin_google_ai_studio.json"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_workflow_research_summarize.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/workflow_research_summarize.json"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_workflow_youtube_short.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/workflow_youtube_short.json"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.vayu.agenticbrowser.app-debug-71:/raw_plugin_flow_studios.json.flat",
+        "source": "com.vayu.agenticbrowser.app-main-73:/raw/plugin_flow_studios.json"
+    }
+]

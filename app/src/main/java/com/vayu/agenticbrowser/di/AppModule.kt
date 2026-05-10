@@ -27,6 +27,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import kotlinx.serialization.json.JsonPrimitive
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -94,7 +95,7 @@ object AppModule {
             pluginRegistry = pluginRegistry,
             toolExecutor = { tool, args ->
                 val jsonArgs = kotlinx.serialization.json.buildJsonObject {
-                    args.forEach { (k, v) -> put(k, v) }
+                    args.forEach { (k, v) -> put(k, JsonPrimitive(v)) }
                 }
                 mcpServer.executeToolDirectly(tool, jsonArgs)
             }

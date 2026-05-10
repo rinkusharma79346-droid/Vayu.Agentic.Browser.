@@ -8,6 +8,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.engine.AgenticBridge
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,7 +87,7 @@ class TabManager private constructor() {
         )
 
         _tabs.update { current ->
-            val newTabs = current.map { it.copy(active = false) } + tabState.copy(active = !background)
+            current.map { it.copy(active = false) } + tabState.copy(active = !background)
         }
 
         if (!background) {

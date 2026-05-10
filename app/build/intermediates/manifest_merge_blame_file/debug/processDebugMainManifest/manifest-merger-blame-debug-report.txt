@@ -1,0 +1,209 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.vayu.agenticbrowser"
+4    android:versionCode="1"
+5    android:versionName="1.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:4:5-67
+11-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+12-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:5:5-76
+12-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:5:22-73
+13    <uses-permission
+13-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:6:5-7:38
+14        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+14-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:6:22-78
+15        android:maxSdkVersion="28" />
+15-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:7:9-35
+16    <uses-permission
+16-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:8:5-9:36
+17        android:name="android.permission.READ_SMS"
+17-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:8:22-64
+18        android:required="false" />
+18-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:9:9-33
+19    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+19-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:10:5-77
+19-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:10:22-74
+20    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+20-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:11:5-94
+20-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:11:22-91
+21    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+21-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:12:5-79
+21-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:12:22-76
+22    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+22-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:13:5-77
+22-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:13:22-74
+23    <uses-permission android:name="android.permission.WAKE_LOCK" />
+23-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:14:5-68
+23-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:14:22-65
+24    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+24-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:15:5-79
+24-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:15:22-76
+25    <uses-permission android:name="android.permission.USE_BIOMETRIC" /> <!-- suppress DeprecatedClassUsageInspection -->
+25-->[androidx.biometric:biometric:1.1.0] /home/z/.gradle/caches/8.9/transforms/5be239044f6527763a23a67056170dcf/transformed/biometric-1.1.0/AndroidManifest.xml:24:5-72
+25-->[androidx.biometric:biometric:1.1.0] /home/z/.gradle/caches/8.9/transforms/5be239044f6527763a23a67056170dcf/transformed/biometric-1.1.0/AndroidManifest.xml:24:22-69
+26    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+26-->[androidx.biometric:biometric:1.1.0] /home/z/.gradle/caches/8.9/transforms/5be239044f6527763a23a67056170dcf/transformed/biometric-1.1.0/AndroidManifest.xml:27:5-74
+26-->[androidx.biometric:biometric:1.1.0] /home/z/.gradle/caches/8.9/transforms/5be239044f6527763a23a67056170dcf/transformed/biometric-1.1.0/AndroidManifest.xml:27:22-71
+27
+28    <permission
+28-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:22:5-24:47
+29        android:name="com.vayu.agenticbrowser.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+29-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:23:9-81
+30        android:protectionLevel="signature" />
+30-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:24:9-44
+31
+32    <uses-permission android:name="com.vayu.agenticbrowser.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+32-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:26:5-97
+32-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
+33
+34    <application
+34-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:17:5-49:19
+35        android:name="com.vayu.agenticbrowser.App"
+35-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:18:9-28
+36        android:allowBackup="true"
+36-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:19:9-35
+37        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+37-->[androidx.core:core:1.13.1] /home/z/.gradle/caches/8.9/transforms/76d12749d7ad8f671010c7b037f157a6/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
+38        android:debuggable="true"
+39        android:extractNativeLibs="false"
+40        android:icon="@mipmap/ic_launcher"
+40-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:20:9-43
+41        android:label="VAYU Browser"
+41-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:21:9-37
+42        android:roundIcon="@mipmap/ic_launcher_round"
+42-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:22:9-54
+43        android:supportsRtl="true"
+43-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:23:9-35
+44        android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+44-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:24:9-68
+45        android:usesCleartextTraffic="true" >
+45-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:25:9-44
+46        <activity
+46-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:27:9-36:20
+47            android:name="com.vayu.agenticbrowser.MainActivity"
+47-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:28:13-41
+48            android:configChanges="orientation|screenSize|keyboard|keyboardHidden"
+48-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:30:13-83
+49            android:exported="true"
+49-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:29:13-36
+50            android:windowSoftInputMode="adjustResize" >
+50-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:31:13-55
+51            <intent-filter>
+51-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:32:13-35:29
+52                <action android:name="android.intent.action.MAIN" />
+52-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:33:17-69
+52-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:33:25-66
+53
+54                <category android:name="android.intent.category.LAUNCHER" />
+54-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:34:17-77
+54-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:34:27-74
+55            </intent-filter>
+56        </activity>
+57
+58        <service
+58-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:38:9-42:63
+59            android:name="com.vayu.agenticbrowser.McpForegroundService"
+59-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:39:13-49
+60            android:enabled="true"
+60-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:40:13-35
+61            android:exported="false"
+61-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:41:13-37
+62            android:foregroundServiceType="connectedDevice" />
+62-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:42:13-60
+63
+64        <receiver
+64-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:44:9-47:40
+65            android:name="com.vayu.agenticbrowser.brain.GoalAlarmReceiver"
+65-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:45:13-52
+66            android:enabled="true"
+66-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:46:13-35
+67            android:exported="false" />
+67-->/home/z/my-project/Vayu.Agentic.Browser./app/src/main/AndroidManifest.xml:47:13-37
+68
+69        <activity
+69-->[androidx.compose.ui:ui-tooling-android:1.7.0] /home/z/.gradle/caches/8.9/transforms/ea78a1c57ecd1c749fd43aa5101d6ea9/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
+70            android:name="androidx.compose.ui.tooling.PreviewActivity"
+70-->[androidx.compose.ui:ui-tooling-android:1.7.0] /home/z/.gradle/caches/8.9/transforms/ea78a1c57ecd1c749fd43aa5101d6ea9/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
+71            android:exported="true" />
+71-->[androidx.compose.ui:ui-tooling-android:1.7.0] /home/z/.gradle/caches/8.9/transforms/ea78a1c57ecd1c749fd43aa5101d6ea9/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
+72        <activity
+72-->[androidx.compose.ui:ui-test-manifest:1.7.0] /home/z/.gradle/caches/8.9/transforms/8bef3857f3c93a7fa772e330db42975a/transformed/ui-test-manifest-1.7.0/AndroidManifest.xml:23:9-25:39
+73            android:name="androidx.activity.ComponentActivity"
+73-->[androidx.compose.ui:ui-test-manifest:1.7.0] /home/z/.gradle/caches/8.9/transforms/8bef3857f3c93a7fa772e330db42975a/transformed/ui-test-manifest-1.7.0/AndroidManifest.xml:24:13-63
+74            android:exported="true" />
+74-->[androidx.compose.ui:ui-test-manifest:1.7.0] /home/z/.gradle/caches/8.9/transforms/8bef3857f3c93a7fa772e330db42975a/transformed/ui-test-manifest-1.7.0/AndroidManifest.xml:25:13-36
+75
+76        <provider
+76-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+77            android:name="androidx.startup.InitializationProvider"
+77-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+78            android:authorities="com.vayu.agenticbrowser.androidx-startup"
+78-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+79            android:exported="false" >
+79-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+80            <meta-data
+80-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+81                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+81-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+82                android:value="androidx.startup" />
+82-->[androidx.emoji2:emoji2:1.3.0] /home/z/.gradle/caches/8.9/transforms/f720a730b52a9cd431b86245bfa5b386/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+83            <meta-data
+83-->[androidx.lifecycle:lifecycle-process:2.8.6] /home/z/.gradle/caches/8.9/transforms/0460e27aee1283b21b84b1641d7dce59/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:29:13-31:52
+84                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+84-->[androidx.lifecycle:lifecycle-process:2.8.6] /home/z/.gradle/caches/8.9/transforms/0460e27aee1283b21b84b1641d7dce59/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:30:17-78
+85                android:value="androidx.startup" />
+85-->[androidx.lifecycle:lifecycle-process:2.8.6] /home/z/.gradle/caches/8.9/transforms/0460e27aee1283b21b84b1641d7dce59/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:31:17-49
+86            <meta-data
+86-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+87                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+87-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+88                android:value="androidx.startup" />
+88-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+89        </provider>
+90
+91        <receiver
+91-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+92            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+92-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+93            android:directBootAware="false"
+93-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+94            android:enabled="true"
+94-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+95            android:exported="true"
+95-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+96            android:permission="android.permission.DUMP" >
+96-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+97            <intent-filter>
+97-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+98                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+99            </intent-filter>
+100            <intent-filter>
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+101                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+102            </intent-filter>
+103            <intent-filter>
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+104                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+105            </intent-filter>
+106            <intent-filter>
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+107                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/z/.gradle/caches/8.9/transforms/187090c89b8c3be16afce11ca78cb2ac/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+108            </intent-filter>
+109        </receiver>
+110    </application>
+111
+112</manifest>

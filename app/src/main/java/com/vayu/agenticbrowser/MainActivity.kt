@@ -118,7 +118,8 @@ class MainActivity : ComponentActivity() {
                         composable("brain") {
                             BrainScreen(
                                 onBack = { navController.popBackStack() },
-                                agentLoop = agentLoop
+                                agentLoop = agentLoop,
+                                mcpServer = mcpServer
                             )
                         }
                     }

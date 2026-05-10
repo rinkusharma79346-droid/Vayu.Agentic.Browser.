@@ -143,7 +143,7 @@ class TunnelManager private constructor() {
             val connection = downloadUrl.openConnection() as HttpURLConnection
             connection.connectTimeout = 30_000
             connection.readTimeout = 120_000
-            connection.followRedirects = true
+            connection.instanceFollowRedirects = true
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 throw RuntimeException("Failed to download cloudflared: HTTP ${connection.responseCode}")

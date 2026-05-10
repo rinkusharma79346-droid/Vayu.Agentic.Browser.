@@ -24,12 +24,16 @@ import com.vayu.agenticbrowser.brain.AgentLoop
 import com.vayu.agenticbrowser.brain.BrainConfig
 import com.vayu.agenticbrowser.brain.GoalScheduler
 import com.vayu.agenticbrowser.brain.WorkflowEngine
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
+import io.ktor.server.response.*
+import io.ktor.server.request.receiveText
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +42,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class McpServer(
     private val domController: DomController,
@@ -84,6 +89,45 @@ class McpServer(
 
     private val pairingCode = "vayu1234"
 
+    /** Server port — exposed for UI display */
+    val port: Int = 8765
+
+    /** Server name — exposed for UI display */
+    val serverName: String = "VAYU MCP Server"
+
+    /** SSE clients for streaming responses — each client has a channel to receive SSE data */
+    private val sseClients = ConcurrentHashMap<String, Channel<String>>()
+
+    /** Number of connected SSE clients */
+    val sseClientCount: Int get() = sseClients.size
+
+    /**
+     * Get the local IP address for display purposes.
+     */
+    fun getLocalIpAddress(): String {
+        try {
+            val interfaces = java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            for (intf in interfaces) {
+                val addrs = java.util.Collections.list(intf.inetAddresses)
+                for (addr in addrs) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        return addr.hostAddress ?: "0.0.0.0"
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return "0.0.0.0"
+    }
+
+    /** WebSocket URL for MCP clients */
+    fun getWsUrl(): String = "ws://${getLocalIpAddress()}:$port/mcp"
+
+    /** SSE endpoint URL for Claude AI */
+    fun getSseUrl(): String = "http://${getLocalIpAddress()}:$port/sse"
+
+    /** HTTP message endpoint for Claude AI (MCP standard) */
+    fun getMessageUrl(): String = "http://${getLocalIpAddress()}:$port/message"
+
     /**
      * Direct tool execution for the AgentLoop brain.
      * Bypasses WebSocket, executes the tool and returns the result string.
@@ -113,14 +157,15 @@ class McpServer(
             return
         }
 
-        Logger.i("Starting MCP WebSocket server on port 8765")
+        Logger.i("Starting MCP Server on port $port (WebSocket + SSE)")
 
-        server = embeddedServer(CIO, port = 8765) {
+        server = embeddedServer(CIO, port = port) {
             install(WebSockets)
 
             routing {
+                // ===== WebSocket endpoint (existing) =====
                 webSocket("/mcp") {
-                    Logger.i("New MCP client connection")
+                    Logger.i("New MCP WebSocket client connection")
                     val sessionId = UUID.randomUUID().toString()
 
                     try {
@@ -179,14 +224,103 @@ class McpServer(
                         Logger.i("MCP client disconnected: $sessionId")
                     }
                 }
+
+                // ===== SSE endpoint for Claude AI (manual SSE implementation) =====
+                get("/sse") {
+                    Logger.i("New MCP SSE client connection")
+                    val clientId = UUID.randomUUID().toString()
+
+                    // Create a channel for this client to receive messages
+                    val channel = Channel<String>(Channel.BUFFERED)
+                    sseClients[clientId] = channel
+
+                    _connectedSince.value = System.currentTimeMillis()
+
+                    call.respondOutputStream(contentType = ContentType.Text.EventStream) {
+                        val writer = java.io.OutputStreamWriter(this)
+                        try {
+                            // Send endpoint event (MCP protocol: client should POST to /message)
+                            writer.write("event: endpoint\n")
+                            writer.write("data: /message?clientId=$clientId\n\n")
+                            writer.flush()
+
+                            // Send messages from channel as SSE events
+                            for (data in channel) {
+                                writer.write("event: message\n")
+                                writer.write("data: $data\n\n")
+                                writer.flush()
+                            }
+                        } catch (_: java.io.IOException) {
+                            // Client disconnected
+                        } finally {
+                            sseClients.remove(clientId)
+                            writer.close()
+                            Logger.i("MCP SSE client disconnected: $clientId")
+                        }
+                    }
+                }
+
+                // ===== HTTP POST message endpoint for Claude AI (SSE transport) =====
+                post("/message") {
+                    val clientId = call.parameters["clientId"] ?: run {
+                        call.respondText(
+                            """{"error":"clientId parameter required"}""",
+                            ContentType.Application.Json,
+                            HttpStatusCode.BadRequest
+                        )
+                        return@post
+                    }
+
+                    val rawBody = call.receiveText()
+                    Logger.d("SSE message from client $clientId: $rawBody")
+
+                    // Process the MCP message
+                    val response = handleMessage(rawBody)
+
+                    // Push the response via SSE channel to the client
+                    val sseChannel = sseClients[clientId]
+                    if (sseChannel != null) {
+                        try {
+                            sseChannel.send(response)
+                        } catch (e: Exception) {
+                            Logger.e("Failed to send SSE response to client $clientId", e)
+                        }
+                        call.respondText("""{"status":"sent"}""", ContentType.Application.Json)
+                    } else {
+                        // If no SSE channel, return the response directly via HTTP
+                        call.respondText(response, ContentType.Application.Json)
+                    }
+                }
+
+                // ===== Server info endpoint (useful for discovery) =====
+                get("/info") {
+                    val tunnelUrl = tunnelManager.tunnelUrl.value
+                    val info = buildJsonObject {
+                        put("name", serverName)
+                        put("version", "1.0.0")
+                        put("port", port)
+                        put("wsUrl", getWsUrl())
+                        put("sseUrl", getSseUrl())
+                        put("messageUrl", getMessageUrl())
+                        put("pairingCodeRequired", true)
+                        put("toolCount", ToolRegistry.toJson().let {
+                            json.parseToJsonElement(it).jsonArray.size
+                        })
+                        if (tunnelUrl != null) {
+                            put("tunnelUrl", tunnelUrl)
+                        }
+                    }
+                    call.respondText(json.encodeToString(info), ContentType.Application.Json)
+                }
             }
         }.start(wait = false)
 
         _isRunning.value = true
-        Logger.i("MCP Server started on port 8765")
+        Logger.i("MCP Server started on port $port — WS: /mcp, SSE: /sse, HTTP: /message, Info: /info")
     }
 
     fun stop() {
+        sseClients.clear()
         server?.stop(1000, 2000)
         server = null
         _isRunning.value = false

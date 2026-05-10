@@ -8,6 +8,7 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0")
         classpath("com.google.dagger:hilt-android-gradle-plugin:2.51")
         classpath("org.jetbrains.kotlin:kotlin-serialization:2.0.0")
+        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.0.0")
     }
 }
 

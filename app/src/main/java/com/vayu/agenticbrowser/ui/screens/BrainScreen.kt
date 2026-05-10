@@ -1,5 +1,8 @@
 package com.vayu.agenticbrowser.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -7,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,8 +33,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.brain.*
+import com.vayu.agenticbrowser.common.Logger
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -38,9 +46,11 @@ import java.util.*
 @Composable
 fun BrainScreen(
     onBack: () -> Unit,
-    agentLoop: AgentLoop
+    agentLoop: AgentLoop,
+    mcpServer: McpServer
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val state by agentLoop.state.collectAsState()
     val currentGoal by agentLoop.currentGoal.collectAsState()
     val stepLog by agentLoop.stepLog.collectAsState()
@@ -53,12 +63,17 @@ fun BrainScreen(
     val workflowEngine = remember { com.vayu.agenticbrowser.brain.WorkflowEngine(context, agentLoop) }
     val workflows by workflowEngine.workflows.collectAsState()
 
+    // MCP server state
+    val mcpRunning by mcpServer.isRunning.collectAsState()
+    val connectedSince by mcpServer.connectedSince.collectAsState()
+
     var goalInput by remember { mutableStateOf("") }
     var configExpanded by remember { mutableStateOf(false) }
     var scheduleExpanded by remember { mutableStateOf(false) }
     var scheduleGoalText by remember { mutableStateOf("") }
     var scheduleDelayMinutes by remember { mutableStateOf("60") }
     var workflowPickerExpanded by remember { mutableStateOf(false) }
+    var mcpSectionExpanded by remember { mutableStateOf(true) }
 
     val config = remember { agentLoop.getConfig() }
     var provider by remember { mutableStateOf(config.provider) }
@@ -127,6 +142,174 @@ fun BrainScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ===== MCP SERVER SECTION — at top, always prominent =====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (mcpRunning)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    // Header row with toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Router,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (mcpRunning) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "MCP Server",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+
+                        Switch(
+                            checked = mcpRunning,
+                            onCheckedChange = { enable ->
+                                scope.launch(Dispatchers.IO) {
+                                    if (enable) {
+                                        try {
+                                            mcpServer.start()
+                                        } catch (e: Exception) {
+                                            Logger.e("Failed to start MCP server", e)
+                                        }
+                                    } else {
+                                        mcpServer.stop()
+                                    }
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+
+                    // Connection details — visible when server is running
+                    if (mcpRunning) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Server name
+                        DetailRow(
+                            icon = Icons.Default.Badge,
+                            label = "Name",
+                            value = mcpServer.serverName
+                        )
+
+                        // Port
+                        DetailRow(
+                            icon = Icons.Default.SettingsEthernet,
+                            label = "Port",
+                            value = mcpServer.port.toString()
+                        )
+
+                        // WebSocket URL
+                        val wsUrl = mcpServer.getWsUrl()
+                        CopyableDetailRow(
+                            icon = Icons.Default.Cable,
+                            label = "WebSocket",
+                            value = wsUrl,
+                            context = context
+                        )
+
+                        // SSE URL (for Claude AI)
+                        val sseUrl = mcpServer.getSseUrl()
+                        CopyableDetailRow(
+                            icon = Icons.Default.Stream,
+                            label = "SSE (Claude)",
+                            value = sseUrl,
+                            context = context,
+                            highlight = true
+                        )
+
+                        // HTTP Message URL
+                        val msgUrl = mcpServer.getMessageUrl()
+                        CopyableDetailRow(
+                            icon = Icons.Default.Http,
+                            label = "HTTP Message",
+                            value = msgUrl,
+                            context = context
+                        )
+
+                        // SSE clients connected
+                        if (mcpServer.sseClientCount > 0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(8.dp),
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                ) {}
+                                Text(
+                                    text = "${mcpServer.sseClientCount} SSE client(s) connected",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                        }
+
+                        // Connected since
+                        if (connectedSince > 0) {
+                            Text(
+                                text = "Connected since: ${formatDate(connectedSince)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        // Claude setup hint
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "To connect Claude AI: Open Claude Desktop Settings > Developer > Edit Config. Add SSE server URL shown above.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "Turn on to start the MCP server and connect with AI agents like Claude.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // ===== Top Section — State Indicator =====
             StateIndicator(state, currentGoal, totalSteps, totalTokens, elapsedSeconds, thinkingAlpha)
 
@@ -245,7 +428,6 @@ fun BrainScreen(
                                 }
 
                                 Row {
-                                    // Fill goal field
                                     IconButton(
                                         onClick = { goalInput = workflow.goalPrompt },
                                         modifier = Modifier.size(32.dp)
@@ -257,7 +439,6 @@ fun BrainScreen(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
-                                    // Run directly
                                     IconButton(
                                         onClick = {
                                             if (state == AgentState.IDLE) {
@@ -274,7 +455,6 @@ fun BrainScreen(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
-                                    // Delete (only user workflows)
                                     if (!workflow.isBuiltIn) {
                                         IconButton(
                                             onClick = { workflowEngine.deleteWorkflow(workflow.id) },
@@ -343,7 +523,6 @@ fun BrainScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // State color indicator
                 Surface(
                     modifier = Modifier.size(12.dp),
                     shape = MaterialTheme.shapes.extraSmall,
@@ -373,7 +552,6 @@ fun BrainScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Elapsed time
                 val minutes = elapsedSeconds / 60
                 val seconds = elapsedSeconds % 60
                 Text(
@@ -414,7 +592,6 @@ fun BrainScreen(
 
             AnimatedVisibility(visible = configExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Provider selection
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -566,7 +743,6 @@ fun BrainScreen(
                         }
                     }
 
-                    // List scheduled goals
                     scheduledGoals.filter { !it.completed }.forEach { goal ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
@@ -595,6 +771,66 @@ fun BrainScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label + ":", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun CopyableDetailRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    context: Context,
+    highlight: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp),
+            tint = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label + ":", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+            },
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Copy",
+                modifier = Modifier.size(14.dp),
+                tint = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -708,14 +944,12 @@ private fun StepCard(step: AgentStep) {
         )
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
-            // Step number
             Text(
                 text = "#${step.index}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
 
-            // Thought
             if (step.thought != null) {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(
@@ -733,7 +967,6 @@ private fun StepCard(step: AgentStep) {
                 }
             }
 
-            // Tool call — with cyan chip
             if (step.tool != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -746,7 +979,6 @@ private fun StepCard(step: AgentStep) {
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    // Cyan chip for tool name
                     Surface(
                         shape = MaterialTheme.shapes.extraSmall,
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -760,7 +992,6 @@ private fun StepCard(step: AgentStep) {
                     }
                 }
 
-                // Arguments (collapsed JSON, expandable)
                 if (step.args != null) {
                     Row(
                         modifier = Modifier
@@ -788,7 +1019,6 @@ private fun StepCard(step: AgentStep) {
                 }
             }
 
-            // Result summary (green=success, red=error)
             if (step.result != null) {
                 val isError = step.result.startsWith("Error") || step.result.startsWith("""{"error"""")
                 Row(
@@ -811,7 +1041,6 @@ private fun StepCard(step: AgentStep) {
                 }
             }
 
-            // Timestamp
             Text(
                 text = formatDate(step.timestamp),
                 style = MaterialTheme.typography.labelSmall,
@@ -821,11 +1050,6 @@ private fun StepCard(step: AgentStep) {
         }
     }
 }
-
-private fun Modifier.clickable(onClick: () -> Unit): Modifier =
-    this.then(
-        androidx.compose.foundation.clickable(onClick = onClick)
-    )
 
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())

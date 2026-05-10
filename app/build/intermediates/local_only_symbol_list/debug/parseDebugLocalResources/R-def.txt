@@ -1,0 +1,14 @@
+R_DEF: Internal format may change without notice
+local
+color ic_launcher_background
+drawable ic_launcher_foreground
+mipmap ic_launcher
+mipmap ic_launcher_round
+raw plugin_flow_studios
+raw plugin_google_ai_studio
+raw plugin_youtube_upload
+raw workflow_research_summarize
+raw workflow_social_media_post
+raw workflow_youtube_short
+string app_name
+style Theme.VAYUAgenticBrowser

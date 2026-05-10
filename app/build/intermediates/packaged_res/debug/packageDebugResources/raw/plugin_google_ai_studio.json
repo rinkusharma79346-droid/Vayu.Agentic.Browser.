@@ -1,0 +1,41 @@
+{
+  "name": "Google AI Studio",
+  "version": "1.0.0",
+  "description": "Automates content generation and audio downloads on Google AI Studio",
+  "sites": ["aistudio.google.com"],
+  "tools": [
+    {
+      "name": "generate_content",
+      "description": "Clicks the Run button on Google AI Studio to generate content from the current prompt",
+      "parameters": {
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    },
+    {
+      "name": "download_audio",
+      "description": "Waits for an audio element to appear on the page and triggers download of the generated audio",
+      "parameters": {
+        "tabId": {
+          "type": "integer",
+          "required": false,
+          "default": null
+        }
+      }
+    }
+  ],
+  "rules": [
+    {
+      "trigger": "page_load",
+      "action": "wait_for_selector",
+      "args": {
+        "selector": "button[aria-label='Run']"
+      }
+    }
+  ],
+  "formTemplates": [],
+  "enabled": true
+}

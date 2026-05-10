@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.vayu.agenticbrowser.app-mergeDebugResources-69:/values-h320dp-port-v13/values-h320dp-port-v13.xml",
+            "map": [
+                {
+                    "source": "/home/z/.gradle/caches/8.9/transforms/89385aa83e91051005487435c79094c0/transformed/material-1.12.0/res/values-h320dp-port-v13/values-h320dp-port-v13.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "63",
+                        "endOffsets": "114"
+                    }
+                }
+            ]
+        }
+    ]
+}

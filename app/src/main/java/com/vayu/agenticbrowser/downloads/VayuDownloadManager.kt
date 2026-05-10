@@ -14,7 +14,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import java.io.File
+import java.util.UUID
 
 class VayuDownloadManager private constructor() {
 
@@ -112,7 +117,7 @@ class VayuDownloadManager private constructor() {
                     return """{"error":"Failed to click download element: ${parsed["error"]?.jsonPrimitive?.contentOrNull ?: "unknown"}"}"""
                 }
 
-                val downloadUrl = parsed["url"]?.jsonPrimitive?.contentOrNull
+                val downloadUrl = parsed["url"]?.jsonPrimitive?.contentOrNull as? String
                 if (downloadUrl != null) {
                     return triggerDownload(downloadUrl, tabId)
                 }
@@ -301,7 +306,7 @@ class VayuDownloadManager private constructor() {
                                 currentRecord?.status == DownloadStatus.FAILED ||
                                 currentRecord?.status == DownloadStatus.CANCELLED
                             ) {
-                                break
+                                return@launch
                             }
                         }
                     }

@@ -1,0 +1,9 @@
+{
+  "id": "builtin_youtube_short",
+  "name": "YouTube Short — AI News Pipeline",
+  "description": "Generate a 60-second AI news voiceover script, produce audio with Charon voice, generate 6 matching scene images, and download all assets.",
+  "goalPrompt": "1. Go to aistudio.google.com, generate a 60-second voiceover script about the latest AI news, use Charon voice to generate audio, download the MP3. 2. Open flow.google.com in a new tab, generate 6 images matching the script scenes, download all images. 3. Confirm all files are downloaded and report the file paths.",
+  "schedule": null,
+  "createdAt": 0,
+  "isBuiltIn": true
+}

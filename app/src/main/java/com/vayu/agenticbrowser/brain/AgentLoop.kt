@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import com.vayu.agenticbrowser.plugins.PluginRegistry
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -147,11 +148,9 @@ class AgentLoop(
 
             // Update step with thought
             if (response.content != null) {
-                updateLastStep(AgentStep(
-                    index = iteration,
-                    thought = response.content.take(500),
-                    timestamp = System.currentTimeMillis()
-                ))
+                updateLastStep { prev ->
+                    prev.copy(thought = response.content.take(500))
+                }
             }
 
             // Check if done
