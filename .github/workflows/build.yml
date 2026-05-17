@@ -43,6 +43,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Clean Gradle wrapper cache
+        run: rm -rf ~/.gradle/wrapper/
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
@@ -82,6 +85,9 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: Clean Gradle wrapper cache
+        run: rm -rf ~/.gradle/wrapper/
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
