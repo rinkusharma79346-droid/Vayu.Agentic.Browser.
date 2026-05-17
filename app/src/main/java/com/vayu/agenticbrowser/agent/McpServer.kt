@@ -1111,7 +1111,12 @@ class McpServer(
                     type = "tool/call_response",
                     id = id,
                     status = "success",
-                    result = json.parseToJsonElement(result)
+                    result = try {
+                        json.parseToJsonElement(result)
+                    } catch (_: Exception) {
+                        // If result is not valid JSON, wrap it as a string value
+                        json.parseToJsonElement("""{"value":${json.encodeToString(result)}}""")
+                    }
                 )
             )
         } catch (e: Exception) {

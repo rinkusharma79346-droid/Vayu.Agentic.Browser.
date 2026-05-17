@@ -295,20 +295,39 @@ class DomController(
                 return@withContext """{"error":"No result from JavaScript evaluation"}"""
             }
 
-            if (result.startsWith("\"") && result.endsWith("\"") && result.length >= 2) {
+            // WebView.evaluateJavascript wraps the result:
+            // - For JS strings: returns "\"hello\"" (quoted JSON string)
+            // - For JS objects/arrays: returns "{\"key\":\"value\"}" (JSON-encoded)
+            // - For null/undefined: returns "null"
+            // We need to detect and handle each case.
+
+            val trimmed = result.trim()
+
+            // If it's a quoted JSON string (starts with " and ends with "), unquote it
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length >= 2) {
                 return@withContext try {
-                    val inner = result.substring(1, result.length - 1)
-                        .replace("\\\\\"", "\"")
-                        .replace("\\\\n", "\n")
-                        .replace("\\\\t", "\t")
+                    // Check if inner content is a JSON object/array (double-escaped by WebView)
+                    val inner = trimmed.substring(1, trimmed.length - 1)
+                    // If inner starts with { or [ after unescaping, it's a double-escaped JSON object
+                    val unescaped = inner
+                        .replace("\\\"", "\"")
+                        .replace("\\n", "\n")
+                        .replace("\\t", "\t")
                         .replace("\\\\", "\\")
-                    inner
+                    // If the unescaped content is valid JSON object/array, return it directly
+                    if (unescaped.trimStart().startsWith("{") || unescaped.trimStart().startsWith("[")) {
+                        unescaped
+                    } else {
+                        // It's a plain string value, return as-is (the inner content)
+                        unescaped
+                    }
                 } catch (e: Exception) {
-                    result
+                    trimmed
                 }
             }
 
-            return@withContext result
+            // For JSON objects/arrays/null returned directly
+            return@withContext trimmed
         }
     }
 

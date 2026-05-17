@@ -4,9 +4,11 @@ import android.webkit.WebView
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.downloads.VayuDownloadManager
 import com.vayu.agenticbrowser.tabs.TabManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 class WaitController(
@@ -79,17 +81,18 @@ class WaitController(
         val effectiveTabId = tabId ?: tabManager.getActiveTabIdValue()
         if (effectiveTabId == -1) return """{"navigated":false,"error":"No active tab"}"""
 
-        val wv = tabManager.getTab(effectiveTabId)
-            ?: return """{"navigated":false,"error":"Tab not found"}"""
-
-        val initialUrl = wv.url ?: ""
-
         return try {
+            val initialUrl = withContext(Dispatchers.Main) {
+                tabManager.getTab(effectiveTabId)?.url ?: ""
+            }
+
             val navigated = withTimeoutOrNull(timeoutMs) {
                 var currentUrl = initialUrl
                 while (currentUrl == initialUrl) {
                     delay(500)
-                    currentUrl = wv.url ?: ""
+                    currentUrl = withContext(Dispatchers.Main) {
+                        tabManager.getTab(effectiveTabId)?.url ?: ""
+                    }
                 }
                 currentUrl
             }
@@ -113,15 +116,16 @@ class WaitController(
         val effectiveTabId = tabId ?: tabManager.getActiveTabIdValue()
         if (effectiveTabId == -1) return """{"found":false,"error":"No active tab"}"""
 
-        val wv = tabManager.getTab(effectiveTabId)
-            ?: return """{"found":false,"error":"Tab not found"}"""
-
         return try {
             val found = withTimeoutOrNull(timeoutMs) {
-                var currentUrl = wv.url ?: ""
+                var currentUrl = withContext(Dispatchers.Main) {
+                    tabManager.getTab(effectiveTabId)?.url ?: ""
+                }
                 while (!currentUrl.contains(substring)) {
                     delay(500)
-                    currentUrl = wv.url ?: ""
+                    currentUrl = withContext(Dispatchers.Main) {
+                        tabManager.getTab(effectiveTabId)?.url ?: ""
+                    }
                 }
                 currentUrl
             }
@@ -154,40 +158,52 @@ class WaitController(
         }
     }
 
+    /**
+     * Check if a selector exists by evaluating JS on the WebView.
+     * Must run on Main thread since it calls WebView.evaluateJavascript().
+     */
     private suspend fun checkSelectorExists(tabId: Int, selector: String): Boolean {
-        val wv = tabManager.getTab(tabId) ?: return false
-        return suspendCancellableCoroutine { cont ->
-            val jsCode = """
-                (function() {
-                    try {
-                        var el = document.querySelector('${selector.replace("'", "\\'")}');
-                        return el !== null ? 'true' : 'false';
-                    } catch(e) {
-                        return 'false';
-                    }
-                })()
-            """.trimIndent()
-            wv.evaluateJavascript(jsCode) { result ->
-                cont.resume(result?.trim() == "true") {}
+        return withContext(Dispatchers.Main) {
+            val wv = tabManager.getTab(tabId) ?: return@withContext false
+            suspendCancellableCoroutine { cont ->
+                val jsCode = """
+                    (function() {
+                        try {
+                            var el = document.querySelector('${selector.replace("'", "\\'")}');
+                            return el !== null ? 'true' : 'false';
+                        } catch(e) {
+                            return 'false';
+                        }
+                    })()
+                """.trimIndent()
+                wv.evaluateJavascript(jsCode) { result ->
+                    cont.resume(result?.trim() == "true") {}
+                }
             }
         }
     }
 
+    /**
+     * Check if text exists on the page by evaluating JS on the WebView.
+     * Must run on Main thread since it calls WebView.evaluateJavascript().
+     */
     private suspend fun checkTextExists(tabId: Int, text: String): Boolean {
-        val wv = tabManager.getTab(tabId) ?: return false
-        return suspendCancellableCoroutine { cont ->
+        return withContext(Dispatchers.Main) {
+            val wv = tabManager.getTab(tabId) ?: return@withContext false
             val escapedText = text.replace("\\", "\\\\").replace("'", "\\'")
-            val jsCode = """
-                (function() {
-                    try {
-                        return document.body.innerText.includes('$escapedText') ? 'true' : 'false';
-                    } catch(e) {
-                        return 'false';
-                    }
-                })()
-            """.trimIndent()
-            wv.evaluateJavascript(jsCode) { result ->
-                cont.resume(result?.trim() == "true") {}
+            suspendCancellableCoroutine { cont ->
+                val jsCode = """
+                    (function() {
+                        try {
+                            return document.body.innerText.includes('$escapedText') ? 'true' : 'false';
+                        } catch(e) {
+                            return 'false';
+                        }
+                    })()
+                """.trimIndent()
+                wv.evaluateJavascript(jsCode) { result ->
+                    cont.resume(result?.trim() == "true") {}
+                }
             }
         }
     }
