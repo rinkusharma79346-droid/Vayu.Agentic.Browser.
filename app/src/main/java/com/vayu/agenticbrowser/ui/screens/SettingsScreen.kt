@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -35,6 +36,7 @@ import com.vayu.agenticbrowser.common.NetworkMonitor
 import com.vayu.agenticbrowser.engine.StealthController
 import com.vayu.agenticbrowser.plugins.PluginRegistry
 import com.vayu.agenticbrowser.tunnel.TunnelManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.net.NetworkInterface
 
@@ -180,6 +182,15 @@ fun SettingsScreen(
                                 scope.launch {
                                     if (enable) {
                                         tunnelManager.startTunnel()
+                                        // Check if tunnel actually started after a brief delay
+                                        delay(3000)
+                                        if (!tunnelManager.isRunning.value) {
+                                            Toast.makeText(
+                                                context,
+                                                "Cloudflare Tunnel failed to start. The cloudflared binary cannot run on this device. Use the Render SSE relay instead.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                     } else {
                                         tunnelManager.stopTunnel()
                                     }

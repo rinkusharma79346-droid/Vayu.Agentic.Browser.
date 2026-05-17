@@ -27,7 +27,7 @@ object McpConfig {
     const val SERVER_NAME = "VAYU MCP Server"
     
     /** App version */
-    const val APP_VERSION = "1.3.0"
+    const val APP_VERSION = "1.4.0"
 }
 
 /**

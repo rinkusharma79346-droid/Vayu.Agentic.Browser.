@@ -39,6 +39,7 @@ import com.vayu.agenticbrowser.agent.McpServer
 import com.vayu.agenticbrowser.agent.McpStatus
 import com.vayu.agenticbrowser.agent.RelayStatus
 import com.vayu.agenticbrowser.brain.*
+import android.widget.Toast
 import com.vayu.agenticbrowser.common.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -60,6 +61,7 @@ fun BrainScreen(
     val stepLog by agentLoop.stepLog.collectAsState()
     val totalTokens by agentLoop.totalTokens.collectAsState()
     val totalSteps by agentLoop.totalSteps.collectAsState()
+    val lastError by agentLoop.lastError.collectAsState()
     val goalScheduler = remember { GoalScheduler.getInstance() }
     val scheduledGoals by goalScheduler.scheduledGoals.collectAsState()
 
@@ -89,6 +91,13 @@ fun BrainScreen(
     var model by remember { mutableStateOf(config.model) }
     var maxTokens by remember { mutableStateOf(config.maxTokens.toString()) }
     var showApiKey by remember { mutableStateOf(false) }
+
+    // Show error Toast when lastError changes
+    LaunchedEffect(lastError) {
+        if (lastError != null) {
+            Toast.makeText(context, lastError, Toast.LENGTH_LONG).show()
+        }
+    }
 
     // Elapsed time counter
     var elapsedSeconds by remember { mutableIntStateOf(0) }
@@ -394,7 +403,7 @@ fun BrainScreen(
             }
 
             // ===== Top Section — State Indicator =====
-            StateIndicator(state, currentGoal, totalSteps, totalTokens, elapsedSeconds, thinkingAlpha)
+            StateIndicator(state, currentGoal, totalSteps, totalTokens, elapsedSeconds, thinkingAlpha, lastError)
 
             // ===== Goal Input =====
             OutlinedTextField(
@@ -925,7 +934,8 @@ private fun StateIndicator(
     totalSteps: Int,
     totalTokens: Int,
     elapsedSeconds: Int,
-    thinkingAlpha: Float
+    thinkingAlpha: Float,
+    lastError: String? = null
 ) {
     val (color, icon, label) = when (state) {
         AgentState.IDLE -> Triple(
@@ -1005,6 +1015,45 @@ private fun StateIndicator(
                 Text(
                     text = String.format("Time: %d:%02d", minutes, seconds),
                     style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            // Show error message when FAILED
+            if (state == AgentState.FAILED && lastError != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = lastError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 4
+                        )
+                    }
+                }
+            }
+
+            // Show config hint when IDLE and no API key
+            if (state == AgentState.IDLE && currentGoal == null) {
+                Text(
+                    text = "Tip: Configure your LLM provider & API key in Configuration below before running a goal.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }

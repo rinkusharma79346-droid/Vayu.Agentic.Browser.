@@ -63,9 +63,36 @@ class AgentLoop(
 
     fun getConfig(): BrainConfig = config
 
+    /** Error message exposed for UI feedback */
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+
     fun runGoal(goal: String) {
         if (_state.value != AgentState.IDLE) {
             Logger.w("AgentLoop: Cannot start new goal — state is ${_state.value}")
+            return
+        }
+
+        // Validate API key before starting
+        _lastError.value = null
+        if (config.apiKey.isBlank()) {
+            val msg = "No API key configured. Go to Configuration below, select a provider (GEMINI/GROQ/OPENROUTER), enter your API key, and click Save."
+            Logger.e("AgentLoop: $msg")
+            _lastError.value = msg
+            _state.value = AgentState.FAILED
+            _currentGoal.value = goal
+            addStep(AgentStep(
+                index = 0,
+                thought = msg,
+                timestamp = System.currentTimeMillis()
+            ))
+            // Reset to IDLE after a brief delay so user can retry
+            CoroutineScope(Dispatchers.Main).launch {
+                delay(3000)
+                if (_state.value == AgentState.FAILED) {
+                    _state.value = AgentState.IDLE
+                }
+            }
             return
         }
 
@@ -153,8 +180,38 @@ class AgentLoop(
                 }
             }
 
+            // Check if LLM returned an error
+            if (response.finishReason == "error") {
+                Logger.e("AgentLoop: LLM returned error: ${response.content}")
+                _lastError.value = response.content
+                _state.value = AgentState.FAILED
+                updateLastStep { prev ->
+                    prev.copy(thought = "LLM Error: ${response.content?.take(300) ?: "Unknown error"}")
+                }
+                return
+            }
+
             // Check if done
             if (response.toolCalls == null || response.toolCalls.isEmpty()) {
+                // Only mark COMPLETED if the response looks like a real completion,
+                // not an API error masquerading as content
+                val contentStr = response.content ?: ""
+                val isErrorLike = contentStr.contains("API error", ignoreCase = true) ||
+                        contentStr.contains("Request failed", ignoreCase = true) ||
+                        contentStr.contains("401", ignoreCase = true) ||
+                        contentStr.contains("403", ignoreCase = true) ||
+                        contentStr.contains("Unauthorized", ignoreCase = true)
+
+                if (isErrorLike) {
+                    Logger.e("AgentLoop: LLM returned error-like content: $contentStr")
+                    _lastError.value = contentStr
+                    _state.value = AgentState.FAILED
+                    updateLastStep { prev ->
+                        prev.copy(thought = "LLM Error: ${contentStr.take(300)}")
+                    }
+                    return
+                }
+
                 Logger.i("AgentLoop: No more tool calls — goal completed")
                 _state.value = AgentState.COMPLETED
                 addStep(AgentStep(
