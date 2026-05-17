@@ -502,12 +502,8 @@ class McpServer(
         }
         sessionRecorder.recordCommand(tool, argsMap)
 
-        // All tool calls that touch WebView must run on the Main thread.
-        // When invoked via relay (WebSocket → IO dispatcher), WebView methods
-        // throw "A WebView method was called on thread 'DefaultDispatcher-worker-X'".
-        return withContext(Dispatchers.Main) {
-            try {
-                val result: String = when (tool) {
+        return try {
+            val result: String = when (tool) {
                 // ===== Phase 1: Browser DOM Tools =====
                 "browser_navigate" -> {
                     val url = args["url"]?.jsonPrimitive?.content ?: ""
@@ -643,17 +639,21 @@ class McpServer(
                 // ===== Phase 2: Screenshot Tools =====
                 "screenshot_full" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"success":false,"error":"No WebView available"}"""
-                    ScreenshotUtil.screenshotFull(wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"success":false,"error":"No WebView available"}"""
+                        ScreenshotUtil.screenshotFull(wv)
+                    }
                 }
 
                 "screenshot_element" -> {
                     val selector = args["selector"]?.jsonPrimitive?.content ?: ""
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"success":false,"error":"No WebView available"}"""
-                    ScreenshotUtil.screenshotElement(wv, selector)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"success":false,"error":"No WebView available"}"""
+                        ScreenshotUtil.screenshotElement(wv, selector)
+                    }
                 }
 
                 // ===== Phase 3: Vault Tools =====
@@ -695,10 +695,12 @@ class McpServer(
 
                 "vault_fill_login" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"error":"No WebView available"}"""
-                    val siteUrl = args["siteUrl"]?.jsonPrimitive?.content ?: wv.url ?: ""
-                    credentialVault.fillLoginForm(siteUrl, wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"error":"No WebView available"}"""
+                        val siteUrl = args["siteUrl"]?.jsonPrimitive?.content ?: wv.url ?: ""
+                        credentialVault.fillLoginForm(siteUrl, wv)
+                    }
                 }
 
                 "vault_get_otp" -> {
@@ -734,20 +736,22 @@ class McpServer(
                     } else {
                         val profileId = args["profileId"]?.jsonPrimitive?.content ?: ""
                         val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                        val wv = resolveWebView(tabId)
-                            ?: return """{"error":"No WebView available"}"""
+                        withContext(Dispatchers.Main) {
+                            val wv = resolveWebView(tabId)
+                                ?: return@withContext """{"error":"No WebView available"}"""
 
-                        val cookiesResult = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
-                            wv.evaluateJavascript("document.cookie") { result -> cont.resume(result) {} }
-                        }
+                            val cookiesResult = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                                wv.evaluateJavascript("document.cookie") { result -> cont.resume(result) {} }
+                            }
 
-                        val cookiesJson = cookiesResult?.let { """{"cookies":$it}""" } ?: "{}"
-                        val profile = profileManager.getProfile(profileId)
-                        if (profile != null) {
-                            profileManager.saveProfile(profile.copy(savedCookiesJson = cookiesJson))
-                            """{"success":true,"profileId":"$profileId"}"""
-                        } else {
-                            """{"error":"Profile $profileId not found"}"""
+                            val cookiesJson = cookiesResult?.let { """{"cookies":$it}""" } ?: "{}"
+                            val profile = profileManager.getProfile(profileId)
+                            if (profile != null) {
+                                profileManager.saveProfile(profile.copy(savedCookiesJson = cookiesJson))
+                                """{"success":true,"profileId":"$profileId"}"""
+                            } else {
+                                """{"error":"Profile $profileId not found"}"""
+                            }
                         }
                     }
                 }
@@ -755,41 +759,51 @@ class McpServer(
                 // ===== Phase 3: Form Tools =====
                 "form_detect" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"error":"No WebView available"}"""
-                    formDetector.detectForms(wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"error":"No WebView available"}"""
+                        formDetector.detectForms(wv)
+                    }
                 }
 
                 "form_fill" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"error":"No WebView available"}"""
-                    val mappingObj = args["mapping"]?.jsonObject ?: buildJsonObject {}
-                    val mapping = mappingObj.entries.associate { it.key to it.value.jsonPrimitive.content }
-                    val submitSelector = args["submitSelector"]?.jsonPrimitive?.contentOrNull
-                    formDetector.fillForm(mapping, submitSelector, wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"error":"No WebView available"}"""
+                        val mappingObj = args["mapping"]?.jsonObject ?: buildJsonObject {}
+                        val mapping = mappingObj.entries.associate { it.key to it.value.jsonPrimitive.content }
+                        val submitSelector = args["submitSelector"]?.jsonPrimitive?.contentOrNull
+                        formDetector.fillForm(mapping, submitSelector, wv)
+                    }
                 }
 
                 // ===== Phase 3: Dialog Tools =====
                 "dialog_detect" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"detected":false,"error":"No WebView available"}"""
-                    dialogController.detectDialog(wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"detected":false,"error":"No WebView available"}"""
+                        dialogController.detectDialog(wv)
+                    }
                 }
 
                 "dialog_accept" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"success":false,"error":"No WebView available"}"""
-                    dialogController.acceptDialog(wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"success":false,"error":"No WebView available"}"""
+                        dialogController.acceptDialog(wv)
+                    }
                 }
 
                 "dialog_dismiss" -> {
                     val tabId = args["tabId"]?.jsonPrimitive?.intOrNull
-                    val wv = resolveWebView(tabId)
-                        ?: return """{"success":false,"error":"No WebView available"}"""
-                    dialogController.dismissDialog(wv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(tabId)
+                            ?: return@withContext """{"success":false,"error":"No WebView available"}"""
+                        dialogController.dismissDialog(wv)
+                    }
                 }
 
                 // ===== Phase 4: Plugin Tools =====
@@ -885,49 +899,55 @@ class McpServer(
                 "user_agent_set" -> {
                     val userAgent = args["userAgent"]?.jsonPrimitive?.content ?: ""
                     val effectiveUa = StealthController.USER_AGENT_PRESETS[userAgent] ?: userAgent
-                    val wv = resolveWebView(null)
-                    if (wv != null) {
-                        StealthController.setUserAgent(wv, effectiveUa)
-                        // Apply to all tab WebViews
-                        tabManager.tabs.value.forEach { tab ->
-                            tabManager.getTab(tab.tabId)?.let { tabWv ->
-                                StealthController.setUserAgent(tabWv, effectiveUa)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(null)
+                        if (wv != null) {
+                            StealthController.setUserAgent(wv, effectiveUa)
+                            // Apply to all tab WebViews
+                            tabManager.tabs.value.forEach { tab ->
+                                tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                    StealthController.setUserAgent(tabWv, effectiveUa)
+                                }
                             }
+                            """{"success":true,"userAgent":"${effectiveUa.take(80)}..."}"""
+                        } else {
+                            """{"success":false,"error":"No WebView available"}"""
                         }
-                        """{"success":true,"userAgent":"${effectiveUa.take(80)}..."}"""
-                    } else {
-                        """{"success":false,"error":"No WebView available"}"""
                     }
                 }
 
                 // ===== Phase 4: Stealth Tools =====
                 "stealth_enable" -> {
-                    val wv = resolveWebView(null)
-                    if (wv != null) {
-                        StealthController.applyStealthMode(wv)
-                        tabManager.tabs.value.forEach { tab ->
-                            tabManager.getTab(tab.tabId)?.let { tabWv ->
-                                StealthController.applyStealthMode(tabWv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(null)
+                        if (wv != null) {
+                            StealthController.applyStealthMode(wv)
+                            tabManager.tabs.value.forEach { tab ->
+                                tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                    StealthController.applyStealthMode(tabWv)
+                                }
                             }
+                            """{"success":true,"stealthEnabled":true}"""
+                        } else {
+                            """{"success":false,"error":"No WebView available"}"""
                         }
-                        """{"success":true,"stealthEnabled":true}"""
-                    } else {
-                        """{"success":false,"error":"No WebView available"}"""
                     }
                 }
 
                 "stealth_disable" -> {
-                    val wv = resolveWebView(null)
-                    if (wv != null) {
-                        StealthController.removeStealthMode(wv)
-                        tabManager.tabs.value.forEach { tab ->
-                            tabManager.getTab(tab.tabId)?.let { tabWv ->
-                                StealthController.removeStealthMode(tabWv)
+                    withContext(Dispatchers.Main) {
+                        val wv = resolveWebView(null)
+                        if (wv != null) {
+                            StealthController.removeStealthMode(wv)
+                            tabManager.tabs.value.forEach { tab ->
+                                tabManager.getTab(tab.tabId)?.let { tabWv ->
+                                    StealthController.removeStealthMode(tabWv)
+                                }
                             }
+                            """{"success":true,"stealthEnabled":false}"""
+                        } else {
+                            """{"success":false,"error":"No WebView available"}"""
                         }
-                        """{"success":true,"stealthEnabled":false}"""
-                    } else {
-                        """{"success":false,"error":"No WebView available"}"""
                     }
                 }
 
@@ -1105,7 +1125,6 @@ class McpServer(
                 )
             )
         }
-        } // end withContext(Dispatchers.Main)
     }
 
     private suspend fun handleRecordingReplayTool(tool: String, args: Map<String, String>): String {
