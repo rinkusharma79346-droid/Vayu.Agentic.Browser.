@@ -36,6 +36,7 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -501,8 +502,12 @@ class McpServer(
         }
         sessionRecorder.recordCommand(tool, argsMap)
 
-        return try {
-            val result: String = when (tool) {
+        // All tool calls that touch WebView must run on the Main thread.
+        // When invoked via relay (WebSocket → IO dispatcher), WebView methods
+        // throw "A WebView method was called on thread 'DefaultDispatcher-worker-X'".
+        return withContext(Dispatchers.Main) {
+            try {
+                val result: String = when (tool) {
                 // ===== Phase 1: Browser DOM Tools =====
                 "browser_navigate" -> {
                     val url = args["url"]?.jsonPrimitive?.content ?: ""
@@ -1100,6 +1105,7 @@ class McpServer(
                 )
             )
         }
+        } // end withContext(Dispatchers.Main)
     }
 
     private suspend fun handleRecordingReplayTool(tool: String, args: Map<String, String>): String {

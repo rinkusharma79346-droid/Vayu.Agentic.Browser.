@@ -3,8 +3,10 @@ package com.vayu.agenticbrowser.engine
 import android.webkit.WebView
 import com.vayu.agenticbrowser.common.Logger
 import com.vayu.agenticbrowser.tabs.TabManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -35,27 +37,29 @@ class DomController(
 
     suspend fun navigate(url: String, tabId: Int? = null): String {
         return try {
-            val wv = resolveTab(tabId)
-            val effectiveTabId = tabId ?: tabManager.getActiveTabIdValue()
+            withContext(Dispatchers.Main) {
+                val wv = resolveTab(tabId)
+                val effectiveTabId = tabId ?: tabManager.getActiveTabIdValue()
 
-            val deferred = if (effectiveTabId != -1) {
-                tabManager.createPageLoadDeferred(effectiveTabId)
-            } else {
-                webViewManager.createPageLoadDeferred()
+                val deferred = if (effectiveTabId != -1) {
+                    tabManager.createPageLoadDeferred(effectiveTabId)
+                } else {
+                    webViewManager.createPageLoadDeferred()
+                }
+
+                Logger.i("Navigating tab ${effectiveTabId} to: $url")
+                wv.loadUrl(url)
+
+                withTimeoutOrNull(10_000L) {
+                    deferred.await()
+                }
+
+                val title = wv.title ?: ""
+                val currentUrl = wv.url ?: ""
+                json.encodeToString(
+                    NavigateResult(success = true, title = title, url = currentUrl)
+                )
             }
-
-            Logger.i("Navigating tab ${effectiveTabId} to: $url")
-            wv.loadUrl(url)
-
-            withTimeoutOrNull(10_000L) {
-                deferred.await()
-            }
-
-            val title = wv.title ?: ""
-            val currentUrl = wv.url ?: ""
-            json.encodeToString(
-                NavigateResult(success = true, title = title, url = currentUrl)
-            )
         } catch (e: Exception) {
             Logger.e("navigate error", e)
             json.encodeToString(
@@ -271,33 +275,41 @@ class DomController(
         }
     }
 
+    /**
+     * Evaluate JavaScript on the WebView and wait for the result.
+     * All WebView operations are dispatched to the Main thread to avoid
+     * "A WebView method was called on thread 'DefaultDispatcher-worker-X'"
+     * errors when invoked from background coroutine contexts (e.g., MCP relay).
+     */
     private suspend fun evaluateJsAndWait(script: String, tabId: Int? = null): String {
-        val wv = resolveTab(tabId)
+        return withContext(Dispatchers.Main) {
+            val wv = resolveTab(tabId)
 
-        val result = suspendCancellableCoroutine<String?> { cont ->
-            wv.evaluateJavascript(script) { res ->
-                cont.resume(res) {}
+            val result = suspendCancellableCoroutine<String?> { cont ->
+                wv.evaluateJavascript(script) { res ->
+                    cont.resume(res) {}
+                }
             }
-        }
 
-        if (result == null) {
-            return """{"error":"No result from JavaScript evaluation"}"""
-        }
-
-        if (result.startsWith("\"") && result.endsWith("\"") && result.length >= 2) {
-            return try {
-                val inner = result.substring(1, result.length - 1)
-                    .replace("\\\\\"", "\"")
-                    .replace("\\\\n", "\n")
-                    .replace("\\\\t", "\t")
-                    .replace("\\\\", "\\")
-                inner
-            } catch (e: Exception) {
-                result
+            if (result == null) {
+                return@withContext """{"error":"No result from JavaScript evaluation"}"""
             }
-        }
 
-        return result
+            if (result.startsWith("\"") && result.endsWith("\"") && result.length >= 2) {
+                return@withContext try {
+                    val inner = result.substring(1, result.length - 1)
+                        .replace("\\\\\"", "\"")
+                        .replace("\\\\n", "\n")
+                        .replace("\\\\t", "\t")
+                        .replace("\\\\", "\\")
+                    inner
+                } catch (e: Exception) {
+                    result
+                }
+            }
+
+            return@withContext result
+        }
     }
 
     @Serializable
