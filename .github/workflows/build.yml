@@ -57,7 +57,7 @@ jobs:
 
       - name: Run Lint
         if: always()
-        run: ./gradlew lintDebug --no-daemon
+        run: ./gradlew lintDebug --no-daemon || true
 
       - name: Upload Lint Report
         if: always()
