@@ -86,10 +86,11 @@ class AgentLoop(
                 thought = msg,
                 timestamp = System.currentTimeMillis()
             ))
-            // Reset to IDLE after a brief delay so user can retry
+            // Reset to IDLE after a longer delay so user can see the error
+            // and understand they need to configure the API key
             CoroutineScope(Dispatchers.Main).launch {
-                delay(3000)
-                if (_state.value == AgentState.FAILED) {
+                delay(5000)
+                if (_state.value == AgentState.FAILED && _lastError.value?.contains("API key") == true) {
                     _state.value = AgentState.IDLE
                 }
             }

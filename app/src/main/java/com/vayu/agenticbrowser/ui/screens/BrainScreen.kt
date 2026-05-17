@@ -77,12 +77,6 @@ fun BrainScreen(
     val relayStatusVal by mcpServer.relayStatus.collectAsState()
 
     var goalInput by remember { mutableStateOf("") }
-    var configExpanded by remember { mutableStateOf(false) }
-    var scheduleExpanded by remember { mutableStateOf(false) }
-    var scheduleGoalText by remember { mutableStateOf("") }
-    var scheduleDelayMinutes by remember { mutableStateOf("60") }
-    var workflowPickerExpanded by remember { mutableStateOf(false) }
-    var mcpSectionExpanded by remember { mutableStateOf(true) }
 
     val config = remember { agentLoop.getConfig() }
     var provider by remember { mutableStateOf(config.provider) }
@@ -91,6 +85,14 @@ fun BrainScreen(
     var model by remember { mutableStateOf(config.model) }
     var maxTokens by remember { mutableStateOf(config.maxTokens.toString()) }
     var showApiKey by remember { mutableStateOf(false) }
+
+    // Auto-expand config if no API key is set (onboarding)
+    var configExpanded by remember { mutableStateOf(config.apiKey.isBlank()) }
+    var scheduleExpanded by remember { mutableStateOf(false) }
+    var scheduleGoalText by remember { mutableStateOf("") }
+    var scheduleDelayMinutes by remember { mutableStateOf("60") }
+    var workflowPickerExpanded by remember { mutableStateOf(false) }
+    var mcpSectionExpanded by remember { mutableStateOf(true) }
 
     // Show error Toast when lastError changes
     LaunchedEffect(lastError) {
@@ -398,6 +400,56 @@ fun BrainScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)
                         )
+                    }
+                }
+            }
+
+            // ===== Setup Required Banner — shown when no API key configured =====
+            val currentConfig = agentLoop.getConfig()
+            val isConfigured = currentConfig.apiKey.isNotBlank()
+
+            if (!isConfigured) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFF3E0) // amber tint
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = Color(0xFFFF6D00) // deep orange
+                            )
+                            Text(
+                                "API Key Required",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFFE65100)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "VAYU Brain needs an LLM API key to work. Scroll down to Configuration, select a provider (GEMINI, GROQ, or OPENROUTER), enter your API key, and click Save.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFBF360C)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { configExpanded = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF6D00),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Open Configuration")
+                        }
                     }
                 }
             }
@@ -723,15 +775,15 @@ fun BrainScreen(
                         singleLine = true
                     )
 
-                    if (provider == LlmProvider.CUSTOM) {
-                        OutlinedTextField(
-                            value = baseUrl,
-                            onValueChange = { baseUrl = it },
-                            label = { Text("Base URL") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    }
+                    // Show base URL for all providers so users can see/modify the endpoint
+                    OutlinedTextField(
+                        value = if (baseUrl.isNotBlank()) baseUrl else BrainConfig.providerDefaults[provider]?.first ?: "",
+                        onValueChange = { baseUrl = it },
+                        label = { Text("Base URL") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        supportingText = { Text("Default: ${BrainConfig.providerDefaults[provider]?.first ?: ""}") }
+                    )
 
                     OutlinedTextField(
                         value = model,
@@ -761,12 +813,16 @@ fun BrainScreen(
                                 enabled = apiKey.isNotBlank()
                             )
                             agentLoop.updateConfig(newConfig)
+                            // Update local state to reflect saved values
+                            configExpanded = false
+                            Toast.makeText(context, "Configuration saved! Provider: ${provider.name}, Model: ${newConfig.effectiveModel()}", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = apiKey.isNotBlank()
                     ) {
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save Configuration")
+                        Text(if (apiKey.isNotBlank()) "Save Configuration" else "Enter API Key First")
                     }
                 }
             }
