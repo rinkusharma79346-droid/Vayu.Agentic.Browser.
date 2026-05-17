@@ -68,10 +68,15 @@ class AgentLoop(
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     fun runGoal(goal: String) {
-        if (_state.value != AgentState.IDLE) {
+        // Allow starting from IDLE or stuck states (COMPLETED/FAILED)
+        if (_state.value != AgentState.IDLE && _state.value != AgentState.COMPLETED && _state.value != AgentState.FAILED) {
             Logger.w("AgentLoop: Cannot start new goal — state is ${_state.value}")
             return
         }
+
+        // Cancel any previous job if still running
+        job?.cancel()
+        job = null
 
         // Validate API key before starting
         _lastError.value = null
@@ -102,6 +107,9 @@ class AgentLoop(
         _totalTokens.value = 0
         _totalSteps.value = 0
 
+        // Set state to THINKING IMMEDIATELY so callers see the transition
+        _state.value = AgentState.THINKING
+
         job = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             executeGoal(goal)
         }
@@ -117,7 +125,8 @@ class AgentLoop(
 
     private suspend fun executeGoal(goal: String) {
         Logger.i("AgentLoop: Starting goal: $goal")
-        _state.value = AgentState.THINKING
+        // State is already set to THINKING by runGoal() — no need to set again here
+        // This eliminates the race condition where MCP clients see IDLE
 
         val messageHistory = mutableListOf<ChatMessage>()
         messageHistory.add(
@@ -153,11 +162,13 @@ class AgentLoop(
             } catch (e: Exception) {
                 Logger.e("AgentLoop: LLM call failed", e)
                 _state.value = AgentState.FAILED
+                _lastError.value = "LLM call failed: ${e.message}"
                 addStep(AgentStep(
                     index = iteration,
                     thought = "LLM call failed: ${e.message}",
                     timestamp = System.currentTimeMillis()
                 ))
+                autoResetToIdle(15000)
                 return
             }
 
@@ -189,6 +200,7 @@ class AgentLoop(
                 updateLastStep { prev ->
                     prev.copy(thought = "LLM Error: ${response.content?.take(300) ?: "Unknown error"}")
                 }
+                autoResetToIdle(15000)
                 return
             }
 
@@ -210,6 +222,7 @@ class AgentLoop(
                     updateLastStep { prev ->
                         prev.copy(thought = "LLM Error: ${contentStr.take(300)}")
                     }
+                    autoResetToIdle(15000)
                     return
                 }
 
@@ -220,12 +233,16 @@ class AgentLoop(
                     thought = response.content ?: "Goal completed",
                     timestamp = System.currentTimeMillis()
                 ))
+                // Auto-reset to IDLE after 10 seconds so new goals can be started
+                autoResetToIdle(10000)
                 return
             }
 
             if (response.finishReason == "stop" || response.finishReason == "end_turn") {
                 Logger.i("AgentLoop: LLM finished — goal completed")
                 _state.value = AgentState.COMPLETED
+                // Auto-reset to IDLE after 10 seconds so new goals can be started
+                autoResetToIdle(10000)
                 return
             }
 
@@ -285,6 +302,19 @@ class AgentLoop(
             thought = "Max iterations reached. Goal may not be fully completed.",
             timestamp = System.currentTimeMillis()
         ))
+        // Auto-reset to IDLE after 15 seconds
+        autoResetToIdle(15000)
+    }
+
+    /** Auto-reset state to IDLE after a delay, allowing new goals to be started */
+    private fun autoResetToIdle(delayMs: Long) {
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(delayMs)
+            if (_state.value == AgentState.COMPLETED || _state.value == AgentState.FAILED) {
+                _state.value = AgentState.IDLE
+                Logger.i("AgentLoop: Auto-reset state to IDLE")
+            }
+        }
     }
 
     private fun parseArguments(argsJson: String): Map<String, String> {
