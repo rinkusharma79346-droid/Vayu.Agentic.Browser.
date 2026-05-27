@@ -15,15 +15,15 @@ android {
         applicationId = "com.vayu.agenticbrowser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.5.2"
+        versionCode = 9
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "MCP_RENDER_URL", "\"https://j-a-r-v-i-s-ktlh.onrender.com/sse\"")
+        buildConfigField("String", "MCP_RENDER_URL", "\"https://vayu-mcp-relay.onrender.com/sse\"")
     }
 
     buildTypes {
