@@ -157,6 +157,16 @@ class AgentLoop(
                 timestamp = System.currentTimeMillis()
             ))
 
+            // Trim message history to prevent context overflow (keep system + last 10 messages)
+            if (messageHistory.size > 12) {
+                val systemMsg = messageHistory.first { it.role == "system" }
+                val recentMsgs = messageHistory.takeLast(10)
+                messageHistory.clear()
+                messageHistory.add(systemMsg)
+                messageHistory.addAll(recentMsgs)
+                Logger.d("AgentLoop: Trimmed message history to ${messageHistory.size} messages")
+            }
+
             val response = try {
                 brainClient.chat(config, messageHistory, availableTools)
             } catch (e: Exception) {

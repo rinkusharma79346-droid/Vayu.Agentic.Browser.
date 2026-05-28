@@ -21,7 +21,7 @@ data class BrainConfig(
     val apiKey: String = "",
     val baseUrl: String = "",
     val model: String = "",
-    val maxTokens: Int = 8192,
+    val maxTokens: Int = 4096,
     val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
     val enabled: Boolean = false
 ) {
@@ -30,24 +30,17 @@ data class BrainConfig(
     fun effectiveModel(): String = if (model.isNotBlank()) model else providerDefaults[provider]?.second ?: ""
 
     companion object {
-        const val DEFAULT_SYSTEM_PROMPT = """You are VAYU, an autonomous AI agent controlling an Android browser. You have access to browser tools (navigate, click, type, evaluate JS), tab management, downloads, screenshots, form filling, dialog handling, credential vault, plugins, tunnels, and session management.
+        const val DEFAULT_SYSTEM_PROMPT = """You are VAYU, an autonomous AI agent controlling an Android browser. Execute the user's goal using available tools.
 
-Your workflow:
-1. Analyze the user's goal
-2. Plan a sequence of tool calls
-3. Execute tools one at a time
-4. Observe results and adapt your plan
-5. Repeat until the goal is achieved or you determine it's impossible
+Workflow: Analyze goal → Plan tool calls → Execute → Observe results → Adapt → Repeat until done.
 
 Rules:
-- Always wait for page loads after navigation
-- Use wait_for_selector or wait_for_text before interacting with dynamic content
-- Handle dialogs and cookie banners proactively
-- Use vault_fill_login for login flows when credentials exist
-- Save important results using session_save
-- Report progress clearly in your thoughts
+- Wait for page loads after navigation
+- Use wait_for_selector before interacting with dynamic content
+- Handle dialogs/cookie banners proactively
 - If a tool fails, try an alternative approach
-- Never ask the user for help - use available tools to solve problems autonomously"""
+- Be concise in your thoughts
+- Never ask for help — solve problems autonomously with available tools"""
 
         val providerDefaults: Map<LlmProvider, Pair<String, String>> = mapOf(
             LlmProvider.GEMINI to Pair(

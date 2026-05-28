@@ -8,16 +8,41 @@ object ToolAdapter {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /**
+     * Core tools that are always included — these cover 95% of agent tasks.
+     * Non-core tools (vault, plugins, tunnel, recording, session, stealth, workflows, brain)
+     * are excluded by default to save tokens and avoid Groq's 413 error.
+     */
+    private val CORE_TOOLS = setOf(
+        // Navigation & DOM
+        "browser_navigate", "browser_query_selector", "browser_click", "browser_type",
+        "browser_evaluate",
+        // Tabs
+        "tab_list", "tab_new", "tab_close", "tab_switch", "tab_execute", "tab_wait_for_load",
+        // Wait
+        "wait_for_selector", "wait_for_text", "wait_for_navigation", "wait_for_url_contains",
+        // Screenshots
+        "screenshot_full", "screenshot_element",
+        // Downloads
+        "download_trigger", "download_list", "download_wait", "download_get_path",
+        // Forms & Dialogs
+        "form_detect", "form_fill", "dialog_detect", "dialog_accept", "dialog_dismiss",
+        // Info
+        "browser_info"
+    )
+
     fun convertToOpenAiFunctions(pluginRegistry: PluginRegistry? = null): List<OpenAiFunction> {
         val functions = mutableListOf<OpenAiFunction>()
 
-        // Convert all MCP tools from ToolRegistry
+        // Only include core tools to stay within Groq's context limit
         for (tool in ToolRegistry.tools) {
+            if (tool.name !in CORE_TOOLS) continue
             val parametersJson = buildParametersJson(tool.parameters)
             functions.add(
                 OpenAiFunction(
                     name = tool.name,
-                    description = tool.description,
+                    // Truncate descriptions to save tokens
+                    description = tool.description.take(200),
                     parameters = parametersJson
                 )
             )
@@ -31,13 +56,12 @@ object ToolAdapter {
             }
 
             for (tool in pluginTools) {
-                // Avoid duplicates from ToolRegistry
                 if (functions.none { it.name == tool.name }) {
                     val parametersJson = buildPluginParametersJson(tool.parameters)
                     functions.add(
                         OpenAiFunction(
                             name = tool.name,
-                            description = tool.description,
+                            description = tool.description.take(200),
                             parameters = parametersJson
                         )
                     )
@@ -55,7 +79,8 @@ object ToolAdapter {
             for ((name, param) in params) {
                 put(name, buildJsonObject {
                     put("type", param.type)
-                    put("description", param.description)
+                    // Truncate param descriptions too
+                    put("description", param.description.take(100))
                 })
             }
         }
