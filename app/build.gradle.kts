@@ -23,7 +23,7 @@ android {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "MCP_RENDER_URL", "\"https://j-a-r-v-i-s-ktlh.onrender.com/sse\"")
+        buildConfigField("String", "MCP_RENDER_URL", "\"https://vayu-mcp-relay.onrender.com/sse\"")
     }
 
     buildTypes {

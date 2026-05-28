@@ -979,20 +979,20 @@ class McpServer(
                 "brain_status" -> {
                     val stats = agentLoop.getStats()
                     val stepLog = agentLoop.stepLog.value.takeLast(5).map { step ->
-                        mapOf(
-                            "index" to step.index,
-                            "thought" to (step.thought?.take(100) ?: ""),
-                            "tool" to (step.tool ?: ""),
-                            "result" to (step.result?.take(100) ?: "")
-                        )
+                        buildJsonObject {
+                            put("index", step.index)
+                            put("thought", step.thought?.take(100) ?: "")
+                            put("tool", step.tool ?: "")
+                            put("result", step.result?.take(100) ?: "")
+                        }
                     }
-                    json.encodeToString(mapOf(
-                        "state" to stats["state"].toString(),
-                        "currentGoal" to stats["currentGoal"].toString(),
-                        "totalSteps" to stats["totalSteps"].toString(),
-                        "totalTokens" to stats["totalTokens"].toString(),
-                        "recentSteps" to stepLog
-                    ))
+                    buildJsonObject {
+                        put("state", stats["state"].toString())
+                        put("currentGoal", stats["currentGoal"].toString())
+                        put("totalSteps", stats["totalSteps"].toString().toIntOrNull() ?: 0)
+                        put("totalTokens", stats["totalTokens"].toString().toIntOrNull() ?: 0)
+                        put("recentSteps", buildJsonArray { stepLog.forEach { add(it) } })
+                    }.toString()
                 }
 
                 "brain_config" -> {
@@ -1026,15 +1026,17 @@ class McpServer(
 
                 "brain_list_goals" -> {
                     val goals = goalScheduler.listGoals()
-                    json.encodeToString(goals.map { g ->
-                        mapOf(
-                            "id" to g.id,
-                            "goal" to g.goal,
-                            "scheduledAt" to g.scheduledAt,
-                            "completed" to g.completed,
-                            "recurring" to (g.recurringIntervalMs != null)
-                        )
-                    })
+                    buildJsonArray {
+                        goals.forEach { g ->
+                            add(buildJsonObject {
+                                put("id", g.id)
+                                put("goal", g.goal)
+                                put("scheduledAt", g.scheduledAt)
+                                put("completed", g.completed)
+                                put("recurring", g.recurringIntervalMs != null)
+                            })
+                        }
+                    }.toString()
                 }
 
                 "brain_schedule" -> {

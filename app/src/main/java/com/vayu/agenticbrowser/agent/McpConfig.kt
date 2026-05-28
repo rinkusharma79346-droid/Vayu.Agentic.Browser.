@@ -5,8 +5,8 @@ package com.vayu.agenticbrowser.agent
  * Render SSE is the primary remote endpoint; local WS is the fallback.
  */
 object McpConfig {
-    /** Remote Render SSE endpoint (JARVIS MCP server) */
-    const val RENDER_SSE_URL = "https://j-a-r-v-i-s-ktlh.onrender.com/sse"
+    /** Remote Render SSE endpoint (VAYU MCP Relay) */
+    const val RENDER_SSE_URL = "https://vayu-mcp-relay.onrender.com/sse"
     
     /** Local WebSocket MCP endpoint */
     const val LOCAL_WS_URL = "ws://localhost:8765/mcp"
